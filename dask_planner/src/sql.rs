@@ -31,6 +31,7 @@ use crate::parser::{DaskParser, DaskStatement};
 use crate::sql::logical::create_model::CreateModelPlanNode;
 
 use pyo3::prelude::*;
+use crate::sql::logical::PyLogicalPlan;
 
 /// DaskSQLContext is main interface used for interacting with DataFusion to
 /// parse SQL queries, build logical plans, and optimize logical plans.
@@ -251,28 +252,33 @@ impl DaskSQLContext {
         &self,
         statement: statement::PyStatement,
     ) -> PyResult<logical::PyLogicalPlan> {
-        match statement.statement {
+        self._logical_relational_algebra(statement.statement)
+            .map(|e| PyLogicalPlan {
+                original_plan: e.clone(),
+                current_node: None
+            })
+            .map_err(py_parsing_exp)
+    }
+
+    /// Creates a non-optimized Relational Algebra LogicalPlan from an AST Statement
+    pub fn _logical_relational_algebra(
+        &self,
+        dask_statement: DaskStatement,
+    ) -> Result<LogicalPlan,DataFusionError> {
+        match dask_statement {
             DaskStatement::Statement(statement) => {
                 let planner = SqlToRel::new(self);
                 planner
                     .statement_to_plan(DFStatement::Statement(statement))
-                    .map(|k| logical::PyLogicalPlan {
-                        original_plan: k,
-                        current_node: None,
-                    })
-                    .map_err(py_parsing_exp)
+
             }
             DaskStatement::CreateModel(create_model) => {
-                Ok(logical::PyLogicalPlan {
-                    original_plan: LogicalPlan::Extension(Extension {
+                Ok(LogicalPlan::Extension(Extension {
                         node: Arc::new(CreateModelPlanNode {
                             model_name: create_model.name,
-                            input: ???,
-                            expr: ???,
+                            input: self._logical_relational_algebra(DaskStatement::Statement(Box::new(create_model.select)))?,
                         })
-                    }),
-                    current_node: None,
-                })
+                    }))
             }
         }
     }

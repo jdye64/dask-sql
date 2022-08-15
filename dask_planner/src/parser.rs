@@ -23,6 +23,8 @@ macro_rules! parser_err {
 pub struct CreateModel {
     /// model name
     pub name: String,
+    // input query
+    pub select: SQLStatement
 }
 
 /// DataFusion Statement representations.
@@ -238,6 +240,8 @@ impl<'a> DaskParser<'a> {
 
         let create = CreateModel {
             name: model_name.to_string(),
+
+            select: self.parser.parse_statement()?
         };
         Ok(DaskStatement::CreateModel(create))
     }

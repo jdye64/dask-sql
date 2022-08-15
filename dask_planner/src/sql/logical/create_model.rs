@@ -14,7 +14,6 @@ use datafusion_common::DFSchemaRef;
 pub struct CreateModelPlanNode {
     pub model_name: String,
     pub input: LogicalPlan,
-    pub expr: Expr,
 }
 
 impl Debug for CreateModelPlanNode {
