@@ -36,7 +36,10 @@ impl UserDefinedLogicalNode for CreateModelPlanNode {
     }
 
     fn expressions(&self) -> Vec<Expr> {
-        vec![] //TODO
+        // there is no need to expose any expressions here since DataFusion would
+        // not be able to do anything with expressions that are specific to
+        // CREATE MODEL
+        vec![]
     }
 
     fn fmt_for_explain(&self, f: &mut fmt::Formatter) -> fmt::Result {
