@@ -36,7 +36,7 @@ impl UserDefinedLogicalNode for CreateModelPlanNode {
     }
 
     fn expressions(&self) -> Vec<Expr> {
-        vec![self.expr.clone()]
+        vec![] //TODO
     }
 
     fn fmt_for_explain(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -53,7 +53,6 @@ impl UserDefinedLogicalNode for CreateModelPlanNode {
         Arc::new(CreateModelPlanNode {
             model_name: self.model_name.clone(),
             input: inputs[0].clone(),
-            expr: exprs[0].clone(),
         })
     }
 }
