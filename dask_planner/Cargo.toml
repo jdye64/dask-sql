@@ -16,6 +16,7 @@ datafusion-expr = "15.0.0"
 datafusion-optimizer = "15.0.0"
 datafusion-sql = "15.0.0"
 env_logger = "0.10"
+linked-hash-map = "0.5.6"
 log = "^0.4"
 mimalloc = { version = "*", default-features = false }
 parking_lot = "0.12"
