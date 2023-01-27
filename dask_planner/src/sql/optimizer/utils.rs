@@ -1,16 +1,12 @@
 use colored::Colorize;
-use datafusion_common::{DataFusionError, Column};
+use datafusion_common::{Column, DataFusionError};
 use datafusion_expr::{LogicalPlan, LogicalPlanBuilder, PlanVisitor};
-
 
 // START - EXPLORING CODE
 
-pub struct NodeSearchCriteria {
-
-}
+pub struct NodeSearchCriteria {}
 
 pub struct EndOfNeedVisitor;
-
 
 impl PlanVisitor for EndOfNeedVisitor {
     type Error = DataFusionError;
@@ -154,12 +150,14 @@ impl OptimizablePlan {
                 LogicalPlan::Join(join) => {
                     let left_cols: Vec<Column> = Vec::new();
                     let right_cols: Vec<Column> = Vec::new();
-                    builder.join(
-                        &join.right,
-                        datafusion_expr::JoinType::Inner,
-                        (left_cols, right_cols),
-                        None
-                    ).expect("invalid join node")
+                    builder
+                        .join(
+                            &join.right,
+                            datafusion_expr::JoinType::Inner,
+                            (left_cols, right_cols),
+                            None,
+                        )
+                        .expect("invalid join node")
                 }
                 _ => panic!("Error, encountered: {:?}", p),
             }
@@ -236,7 +234,14 @@ mod test {
         logical_expr::UNNAMED_TABLE,
     };
     use datafusion_common::DataFusionError;
-    use datafusion_expr::{col, LogicalPlan, LogicalPlanBuilder, logical_plan::builder::LogicalTableSource, JoinType, sum};
+    use datafusion_expr::{
+        col,
+        logical_plan::builder::LogicalTableSource,
+        sum,
+        JoinType,
+        LogicalPlan,
+        LogicalPlanBuilder,
+    };
 
     use super::LogicalPlanType;
     use crate::sql::optimizer::utils;
@@ -290,7 +295,7 @@ mod test {
             .project(vec![col("id")])?
             .build();
 
-        // Creates an `OptimizablePlan` instance with a `search_criteria` that 
+        // Creates an `OptimizablePlan` instance with a `search_criteria` that
         // dictates the nodes that should be search for
         let mut opt_plan = utils::OptimizablePlan::new(
             logical_plan?,
@@ -303,7 +308,9 @@ mod test {
         // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
         // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
         // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
-        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false).distinct()?.build()?]);
+        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
+            .distinct()?
+            .build()?]);
 
         // Rebuilds a single `LogicalPlan` instance from all the moving parts
         let optimized_plan: LogicalPlan = opt_plan.rebuild();
@@ -312,8 +319,6 @@ mod test {
 
         Ok(())
     }
-
-
 
     /// A query like
     /// ```text
@@ -348,7 +353,6 @@ mod test {
     ///         TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
     #[test]
     fn test_remove_extra_column_baggage() -> Result<(), DataFusionError> {
-
         // Projection: SUM(df.a), df2.b
         //   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]
         //     Inner Join: df.c = df2.c
@@ -365,8 +369,7 @@ mod test {
             .project(vec![sum(col("df.a")), col("df2.b")])?
             .build()?;
 
-
-        // Creates an `OptimizablePlan` instance with a `search_criteria` that 
+        // Creates an `OptimizablePlan` instance with a `search_criteria` that
         // dictates the nodes that should be search for
         let mut opt_plan = utils::OptimizablePlan::new(
             plan,
@@ -376,15 +379,15 @@ mod test {
         // Attempts to locate the interesting area of the Optimizer
         opt_plan.find();
 
-        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false).distinct()?.build()?]);
+        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
+            .distinct()?
+            .build()?]);
 
         // Rebuilds a single `LogicalPlan` instance from all the moving parts
         let optimized_plan: LogicalPlan = opt_plan.rebuild();
 
         println!("Optimized Plan: \n{:?}", optimized_plan);
 
-
         Ok(())
     }
-
 }
