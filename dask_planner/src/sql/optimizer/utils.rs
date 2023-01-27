@@ -1,6 +1,32 @@
 use colored::Colorize;
-use datafusion_common::DataFusionError;
+use datafusion_common::{DataFusionError, Column};
 use datafusion_expr::{LogicalPlan, LogicalPlanBuilder, PlanVisitor};
+
+
+// START - EXPLORING CODE
+
+pub struct NodeSearchCriteria {
+
+}
+
+pub struct EndOfNeedVisitor;
+
+
+impl PlanVisitor for EndOfNeedVisitor {
+    type Error = DataFusionError;
+
+    fn pre_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        println!("Pre-Visit: {:?}", _plan);
+        Ok(true)
+    }
+
+    fn post_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        println!("Post-Visit: {:?}", plan);
+        Ok(true)
+    }
+}
+
+// END - EXPLORING CODE
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LogicalPlanType {
@@ -11,10 +37,10 @@ pub enum LogicalPlanType {
     JOIN,
 }
 
-#[derive(Debug)]
 pub struct OptimizablePlan {
     original_plan: LogicalPlan,
     search_criteria: Vec<LogicalPlanType>,
+    visitor: Box<dyn PlanVisitor<Error = DataFusionError>>,
     current_idx: usize,
     match_found: bool,
     left_plan_nodes: Vec<LogicalPlan>,
@@ -27,6 +53,7 @@ impl OptimizablePlan {
         Self {
             original_plan: plan,
             search_criteria: search_criteria,
+            visitor: Box::new(EndOfNeedVisitor),
             current_idx: 0,
             match_found: false,
             left_plan_nodes: Vec::new(),
@@ -41,7 +68,8 @@ impl OptimizablePlan {
     /// search. The left side, matched portion, and right side of the plan
     /// so that further operations can be achieved much more easily.
     pub fn find(&mut self) -> (Vec<LogicalPlan>, Vec<LogicalPlan>, Vec<LogicalPlan>) {
-        let _find_result = self.original_plan.clone().accept(self);
+        let vis: &mut dyn PlanVisitor<Error = DataFusionError> = &mut *self.visitor;
+        let _find_result = self.original_plan.clone().accept(vis);
         (
             self.left_plan_nodes.clone(),
             self.match_plan_nodes.clone(),
@@ -123,6 +151,16 @@ impl OptimizablePlan {
                 LogicalPlan::TableScan(scan) => {
                     LogicalPlanBuilder::from(LogicalPlan::TableScan(scan.clone()))
                 }
+                LogicalPlan::Join(join) => {
+                    let left_cols: Vec<Column> = Vec::new();
+                    let right_cols: Vec<Column> = Vec::new();
+                    builder.join(
+                        &join.right,
+                        datafusion_expr::JoinType::Inner,
+                        (left_cols, right_cols),
+                        None
+                    ).expect("invalid join node")
+                }
                 _ => panic!("Error, encountered: {:?}", p),
             }
         }
@@ -198,13 +236,13 @@ mod test {
         logical_expr::UNNAMED_TABLE,
     };
     use datafusion_common::DataFusionError;
-    use datafusion_expr::{col, LogicalPlan, LogicalPlanBuilder};
+    use datafusion_expr::{col, LogicalPlan, LogicalPlanBuilder, logical_plan::builder::LogicalTableSource, JoinType, sum};
 
     use super::LogicalPlanType;
     use crate::sql::optimizer::utils;
 
     /// Scan an empty data source, mainly used in tests
-    pub fn scan_empty(
+    fn scan_empty(
         name: Option<&str>,
         table_schema: &Schema,
         projection: Option<Vec<usize>>,
@@ -218,30 +256,135 @@ mod test {
         )
     }
 
+    /// Create a LogicalPlanBuilder representing a scan of a table with the provided name and schema.
+    /// This is mostly used for testing and documentation.
+    pub fn table_scan(
+        name: Option<&str>,
+        table_schema: &Schema,
+        projection: Option<Vec<usize>>,
+    ) -> Result<LogicalPlanBuilder, DataFusionError> {
+        let tbl_schema = Arc::new(table_schema.clone());
+        let table_source = Arc::new(LogicalTableSource::new(tbl_schema));
+        LogicalPlanBuilder::scan(name.unwrap_or("test"), table_source, projection)
+    }
+
+    fn test_table_scan(table_name: &str, column_name: &str) -> LogicalPlan {
+        let schema = Schema::new(vec![
+            Field::new(column_name, DataType::UInt32, false),
+            Field::new("c", DataType::UInt32, false),
+        ]);
+        table_scan(Some(table_name), &schema, None)
+            .expect("creating scan")
+            .build()
+            .expect("building plan")
+    }
+
     #[test]
-    fn test_optimizable_plan_visitor() {
+    fn test_optimizable_plan_visitor() -> Result<(), DataFusionError> {
         let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
 
-        let logical_plan = scan_empty(Some("test"), &schema, None)
-            .expect("invalid LogicalPlanBuild")
-            .distinct()
-            .expect("invalid builder")
-            .distinct()
-            .expect("invalid")
-            .project(vec![col("id")])
-            .expect("invalid LogicalPlanBuilder")
+        // Dummy LogicalPlan with 2 subsequent DISTINCT nodes
+        let logical_plan = scan_empty(Some("test"), &schema, None)?
+            .distinct()?
+            .distinct()?
+            .project(vec![col("id")])?
             .build();
 
+        // Creates an `OptimizablePlan` instance with a `search_criteria` that 
+        // dictates the nodes that should be search for
         let mut opt_plan = utils::OptimizablePlan::new(
-            logical_plan.unwrap(),
+            logical_plan?,
             vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
         );
+
         // Attempts to locate the interesting area of the Optimizer
-        let _find_results = opt_plan.find();
-        let replace = LogicalPlanBuilder::empty(false).distinct().unwrap();
-        opt_plan.replace_match_with(vec![replace.build().unwrap()]);
+        opt_plan.find();
+
+        // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
+        // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
+        // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
+        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false).distinct()?.build()?]);
+
+        // Rebuilds a single `LogicalPlan` instance from all the moving parts
         let optimized_plan: LogicalPlan = opt_plan.rebuild();
 
         println!("Optimized Plan: \n{:?}", optimized_plan);
+
+        Ok(())
     }
+
+
+
+    /// A query like
+    /// ```text
+    /// SELECT
+    ///     SUM(df.a), df2.b
+    /// FROM df
+    /// INNER JOIN df2
+    ///     ON df.c = df2.c
+    /// GROUP BY df2.b
+    /// ```
+    ///
+    /// Would typically produce a LogicalPlan like ...
+    /// ```text
+    /// Projection: SUM(df.a), df2.b\
+    ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
+    ///     Inner Join: df.c = df2.c\
+    ///       TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
+    ///       TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
+    /// ```
+    ///
+    /// Where df.c and df2.c would be unnecessarily carried into the aggregate step even though it can
+    /// be dropped.
+    ///
+    /// To solve this problem, we insert a projection after the join step. In our example, the
+    /// optimized LogicalPlan is
+    /// ```text
+    /// Projection: SUM(df.a), df2.b\
+    ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
+    ///     Projection: df.a, df2.b\
+    ///       Inner Join: df.c = df2.c\
+    ///         TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
+    ///         TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
+    #[test]
+    fn test_remove_extra_column_baggage() -> Result<(), DataFusionError> {
+
+        // Projection: SUM(df.a), df2.b
+        //   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]
+        //     Inner Join: df.c = df2.c
+        //       TableScan: df
+        //       TableScan: df2
+        let plan = LogicalPlanBuilder::from(test_table_scan("df", "a"))
+            .join(
+                &LogicalPlanBuilder::from(test_table_scan("df2", "b")).build()?,
+                JoinType::Inner,
+                (vec!["c"], vec!["c"]),
+                None,
+            )?
+            .aggregate(vec![col("df2.b")], vec![sum(col("df.a"))])?
+            .project(vec![sum(col("df.a")), col("df2.b")])?
+            .build()?;
+
+
+        // Creates an `OptimizablePlan` instance with a `search_criteria` that 
+        // dictates the nodes that should be search for
+        let mut opt_plan = utils::OptimizablePlan::new(
+            plan,
+            vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
+        );
+
+        // Attempts to locate the interesting area of the Optimizer
+        opt_plan.find();
+
+        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false).distinct()?.build()?]);
+
+        // Rebuilds a single `LogicalPlan` instance from all the moving parts
+        let optimized_plan: LogicalPlan = opt_plan.rebuild();
+
+        println!("Optimized Plan: \n{:?}", optimized_plan);
+
+
+        Ok(())
+    }
+
 }
