@@ -12,6 +12,11 @@ rust-version = "1.62"
 arrow = { version = "29.0.0", features = ["prettyprint"] }
 async-trait = "0.1.63"
 colored = "2.0.0"
+#datafusion = { git = "https://github.com/jdye64/arrow-datafusion", branch = "sized_planvisitor" }
+#datafusion-common = { git = "https://github.com/jdye64/arrow-datafusion", branch = "sized_planvisitor" }
+#datafusion-expr = { git = "https://github.com/jdye64/arrow-datafusion", branch = "sized_planvisitor" }
+#datafusion-optimizer = { git = "https://github.com/jdye64/arrow-datafusion", branch = "sized_planvisitor" }
+#datafusion-sql = { git = "https://github.com/jdye64/arrow-datafusion", branch = "sized_planvisitor" }
 datafusion = "16.1.0"
 datafusion-common = "16.1.0"
 datafusion-expr = "16.1.0"

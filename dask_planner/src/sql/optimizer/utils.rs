@@ -1,23 +1,80 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 use datafusion_common::{Column, DataFusionError};
-use datafusion_expr::{LogicalPlan, LogicalPlanBuilder, PlanVisitor};
+use datafusion_expr::{Expr, LogicalPlan, LogicalPlanBuilder, PlanVisitor};
 
 // START - EXPLORING CODE
 
 pub struct NodeSearchCriteria {}
 
-pub struct EndOfNeedVisitor;
+pub struct EndOfNeedVisitor {
+    original_plan: LogicalPlan,
+    // While traversing the plan keeps track of the last node that the column was seen at.
+    last_seen_node_map: HashMap<String, LogicalPlan>,
+}
+
+impl EndOfNeedVisitor {
+    fn extract_column_name(&self, expr: &Expr) -> Vec<String> {
+        match expr {
+            Expr::Column(column) => vec![column.name.clone()],
+            Expr::AggregateFunction(agg_func) => {
+                let mut col_names: Vec<String> = Vec::new();
+                for expr in &agg_func.args {
+                    col_names.append(&mut self.extract_column_name(expr));
+                }
+                col_names
+            }
+            _ => panic!("don't know what to do?: {:?}", expr),
+        }
+    }
+
+    pub fn print_map(&self) {
+        for (key, value) in &self.last_seen_node_map {
+            println!("{:?} / {:?}", key, value);
+        }
+    }
+}
 
 impl PlanVisitor for EndOfNeedVisitor {
     type Error = DataFusionError;
 
+    // Since we are looking for the last place a column is needed pre_visit doesn't do
+    // what we need. Instead we use post_visit.
     fn pre_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
-        println!("Pre-Visit: {:?}", _plan);
         Ok(true)
     }
 
+    // Update the last_seen_node_map with the last used location of each Column
     fn post_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
-        println!("Post-Visit: {:?}", plan);
+        println!("Post_Visit: {:?}", plan);
+        let col_names: Vec<String> = match plan {
+            // LogicalPlan::Aggregate(agg) => agg.
+            // LogicalPlan::Distinct(distinct) => distinct.
+            LogicalPlan::Projection(projection) => projection.schema.field_names(),
+            LogicalPlan::Filter(filter) => self.extract_column_name(&filter.predicate),
+            LogicalPlan::TableScan(scan) => scan.projected_schema.field_names(),
+            LogicalPlan::Aggregate(agg) => {
+                let mut col_names: Vec<String> = Vec::new();
+                for ag_ex in &agg.aggr_expr {
+                    col_names.append(&mut self.extract_column_name(ag_ex));
+                }
+
+                for grp_expr in &agg.group_expr {
+                    col_names.append(&mut self.extract_column_name(grp_expr));
+                }
+
+                col_names
+            }
+            LogicalPlan::Join(_join) => vec![], // I think it makes sense to just let the post_visit continue and return nothing for explicit joins.
+            _ => panic!("something: {:?}", plan),
+        };
+
+        // Insert all the columns into the last_seen_map
+        for n in col_names {
+            self.last_seen_node_map.insert(n, plan.clone());
+        }
+
         Ok(true)
     }
 }
@@ -26,17 +83,21 @@ impl PlanVisitor for EndOfNeedVisitor {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LogicalPlanType {
-    AGGREGATE,
-    ANY, // Any allows for any LogicalPlan variant to match on a search, think of it like a wildcard
-    CROSS_JOIN,
-    DISTINCT,
-    JOIN,
+    Aggregate,
+    Any, // Any allows for any LogicalPlan variant to match on a search, think of it like a wildcard
+    CrossJoin,
+    Distinct,
+    Join,
 }
 
-pub struct OptimizablePlan {
+pub struct OptimizablePlan<T>
+where
+    T: PlanVisitor,
+{
     original_plan: LogicalPlan,
     search_criteria: Vec<LogicalPlanType>,
-    visitor: Box<dyn PlanVisitor<Error = DataFusionError>>,
+    // visitor: Box<dyn PlanVisitor<Error = DataFusionError>>,
+    visitor: T,
     current_idx: usize,
     match_found: bool,
     left_plan_nodes: Vec<LogicalPlan>,
@@ -44,12 +105,16 @@ pub struct OptimizablePlan {
     right_plan_nodes: Vec<LogicalPlan>,
 }
 
-impl OptimizablePlan {
-    pub fn new(plan: LogicalPlan, search_criteria: Vec<LogicalPlanType>) -> Self {
+impl<T> OptimizablePlan<T>
+where
+    T: PlanVisitor,
+{
+    pub fn new(plan: LogicalPlan, search_criteria: Vec<LogicalPlanType>, plan_visitor: T) -> Self {
         Self {
             original_plan: plan,
-            search_criteria: search_criteria,
-            visitor: Box::new(EndOfNeedVisitor),
+            search_criteria,
+            // visitor: Box::new(EndOfNeedVisitor { original_plan: plan }),
+            visitor: plan_visitor,
             current_idx: 0,
             match_found: false,
             left_plan_nodes: Vec::new(),
@@ -64,8 +129,7 @@ impl OptimizablePlan {
     /// search. The left side, matched portion, and right side of the plan
     /// so that further operations can be achieved much more easily.
     pub fn find(&mut self) -> (Vec<LogicalPlan>, Vec<LogicalPlan>, Vec<LogicalPlan>) {
-        let vis: &mut dyn PlanVisitor<Error = DataFusionError> = &mut *self.visitor;
-        let _find_result = self.original_plan.clone().accept(vis);
+        let _find_result = self.original_plan.accept(&mut self.visitor);
         (
             self.left_plan_nodes.clone(),
             self.match_plan_nodes.clone(),
@@ -80,7 +144,7 @@ impl OptimizablePlan {
     /// Find a complete math and replace it with the provided `LogicalPlan`
     pub fn find_replace(
         &mut self,
-        replace: LogicalPlan,
+        _replace: LogicalPlan,
     ) -> (Vec<LogicalPlan>, Vec<LogicalPlan>, Vec<LogicalPlan>) {
         self.find()
     }
@@ -152,7 +216,7 @@ impl OptimizablePlan {
                     let right_cols: Vec<Column> = Vec::new();
                     builder
                         .join(
-                            &join.right,
+                            (*join.right).clone(),
                             datafusion_expr::JoinType::Inner,
                             (left_cols, right_cols),
                             None,
@@ -181,7 +245,10 @@ impl OptimizablePlan {
     }
 }
 
-impl PlanVisitor for OptimizablePlan {
+impl<T> PlanVisitor for OptimizablePlan<T>
+where
+    T: PlanVisitor,
+{
     type Error = DataFusionError;
 
     fn pre_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
@@ -192,10 +259,10 @@ impl PlanVisitor for OptimizablePlan {
 
             let cc = self.search_criteria.get(self.current_idx).unwrap();
             self.current_idx = match plan {
-                LogicalPlan::Aggregate(_) => self.does_match(cc, &LogicalPlanType::AGGREGATE),
-                LogicalPlan::CrossJoin(_) => self.does_match(cc, &LogicalPlanType::CROSS_JOIN),
-                LogicalPlan::Distinct(_) => self.does_match(cc, &LogicalPlanType::DISTINCT),
-                LogicalPlan::Join(_) => self.does_match(cc, &LogicalPlanType::JOIN),
+                LogicalPlan::Aggregate(_) => self.does_match(cc, &LogicalPlanType::Aggregate),
+                LogicalPlan::CrossJoin(_) => self.does_match(cc, &LogicalPlanType::CrossJoin),
+                LogicalPlan::Distinct(_) => self.does_match(cc, &LogicalPlanType::Distinct),
+                LogicalPlan::Join(_) => self.does_match(cc, &LogicalPlanType::Join),
                 _ => 0,
             };
 
@@ -219,14 +286,14 @@ impl PlanVisitor for OptimizablePlan {
         Ok(true)
     }
 
-    fn post_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+    fn post_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
         Ok(true)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
     use arrow::datatypes::{DataType, Field, Schema};
     use datafusion::{
@@ -244,7 +311,7 @@ mod test {
     };
 
     use super::LogicalPlanType;
-    use crate::sql::optimizer::utils;
+    use crate::sql::optimizer::utils::{self, EndOfNeedVisitor};
 
     /// Scan an empty data source, mainly used in tests
     fn scan_empty(
@@ -293,13 +360,17 @@ mod test {
             .distinct()?
             .distinct()?
             .project(vec![col("id")])?
-            .build();
+            .build()?;
 
         // Creates an `OptimizablePlan` instance with a `search_criteria` that
         // dictates the nodes that should be search for
         let mut opt_plan = utils::OptimizablePlan::new(
-            logical_plan?,
+            logical_plan.clone(),
             vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
+            EndOfNeedVisitor {
+                original_plan: logical_plan.clone(),
+                last_seen_node_map: HashMap::new(),
+            },
         );
 
         // Attempts to locate the interesting area of the Optimizer
@@ -360,7 +431,7 @@ mod test {
         //       TableScan: df2
         let plan = LogicalPlanBuilder::from(test_table_scan("df", "a"))
             .join(
-                &LogicalPlanBuilder::from(test_table_scan("df2", "b")).build()?,
+                LogicalPlanBuilder::from(test_table_scan("df2", "b")).build()?,
                 JoinType::Inner,
                 (vec!["c"], vec!["c"]),
                 None,
@@ -372,21 +443,28 @@ mod test {
         // Creates an `OptimizablePlan` instance with a `search_criteria` that
         // dictates the nodes that should be search for
         let mut opt_plan = utils::OptimizablePlan::new(
-            plan,
+            plan.clone(),
+            // TODO: This is wrong
             vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
+            EndOfNeedVisitor {
+                original_plan: plan.clone(),
+                last_seen_node_map: HashMap::new(),
+            },
         );
 
         // Attempts to locate the interesting area of the Optimizer
         opt_plan.find();
 
-        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
-            .distinct()?
-            .build()?]);
+        // opt_plan.print_map();
 
-        // Rebuilds a single `LogicalPlan` instance from all the moving parts
-        let optimized_plan: LogicalPlan = opt_plan.rebuild();
+        // opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
+        //     .distinct()?
+        //     .build()?]);
 
-        println!("Optimized Plan: \n{:?}", optimized_plan);
+        // // Rebuilds a single `LogicalPlan` instance from all the moving parts
+        // let optimized_plan: LogicalPlan = opt_plan.rebuild();
+
+        // println!("Optimized Plan: \n{:?}", optimized_plan);
 
         Ok(())
     }
