@@ -288,7 +288,6 @@ mod test {
 
     use super::LogicalPlanType;
     // use crate::sql::optimizer::utils::{self};
-    use crate::sql::optimizer::utils::
 
     /// Scan an empty data source, mainly used in tests
     fn scan_empty(
