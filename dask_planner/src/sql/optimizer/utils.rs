@@ -4,10 +4,11 @@ use colored::Colorize;
 use datafusion_common::{Column, DataFusionError};
 use datafusion_expr::{Expr, LogicalPlan, LogicalPlanBuilder, PlanVisitor};
 
-// START - EXPLORING CODE
 
-pub struct NodeSearchCriteria {}
-
+/// Represents an optimization routine that searches for the last necessary position of a Rex.
+/// Ex: Find the last location that a column is needed so that it can be removed and not shuffled
+/// around in downstream operations
+/// Ex: Push joins down further into the execution stack
 pub struct EndOfNeedVisitor {
     original_plan: LogicalPlan,
     // While traversing the plan keeps track of the last node that the column was seen at.
@@ -26,12 +27,6 @@ impl EndOfNeedVisitor {
                 col_names
             }
             _ => panic!("don't know what to do?: {:?}", expr),
-        }
-    }
-
-    pub fn print_map(&self) {
-        for (key, value) in &self.last_seen_node_map {
-            println!("{:?} / {:?}", key, value);
         }
     }
 }
@@ -79,6 +74,23 @@ impl PlanVisitor for EndOfNeedVisitor {
     }
 }
 
+impl OptimizationStrategy for EndOfNeedVisitor {
+
+    fn optimize(&mut self) -> LogicalPlan {
+        // Check the last time that columns were seen
+        for (key, value) in &self.last_seen_node_map {
+            println!("{:?} / {:?}", key, value);
+        }
+        
+        // TODO: just returning original plan for now
+        self.original_plan.clone()
+    }
+
+    fn rebuild(&mut self) -> LogicalPlan {
+        todo!()
+    }
+}
+
 // END - EXPLORING CODE
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -90,7 +102,7 @@ pub enum LogicalPlanType {
     Join,
 }
 
-pub struct OptimizablePlan<T>
+pub struct OptimizablePlanBackup<T>
 where
     T: PlanVisitor,
 {
@@ -105,7 +117,7 @@ where
     right_plan_nodes: Vec<LogicalPlan>,
 }
 
-impl<T> OptimizablePlan<T>
+impl<T> OptimizablePlanBackup<T>
 where
     T: PlanVisitor,
 {
@@ -158,9 +170,75 @@ where
         );
     }
 
-    /// Takes the current `left_plan_nodes`, `match_plan_nodes` and `right_plan_nodes` and rebuilds
-    /// a complete `LogicalPlan`
-    pub fn rebuild(&mut self) -> LogicalPlan {
+    /// Utility method for checking if the `current_criteria` node matches
+    /// the `LogicalPlan` variant. If so the `current_idx` is incremented.
+    fn does_match(
+        &self,
+        left_plan_type: &LogicalPlanType,
+        right_plan_type: &LogicalPlanType,
+    ) -> usize {
+        if *left_plan_type == *right_plan_type {
+            self.current_idx + 1
+        } else {
+            0
+        }
+    }
+}
+
+impl<T> PlanVisitor for OptimizablePlanBackup<T>
+where
+    T: PlanVisitor,
+{
+    type Error = DataFusionError;
+
+    fn pre_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        // Ok lets see if we can match the search_criteria against these nodes
+        if !self.match_found {
+            // Push the current plan node into the left_plan_nodes, if a match is later determined it will be popped and moved
+            self.left_plan_nodes.push(plan.clone());
+
+            let cc = self.search_criteria.get(self.current_idx).unwrap();
+            self.current_idx = match plan {
+                LogicalPlan::Aggregate(_) => self.does_match(cc, &LogicalPlanType::Aggregate),
+                LogicalPlan::CrossJoin(_) => self.does_match(cc, &LogicalPlanType::CrossJoin),
+                LogicalPlan::Distinct(_) => self.does_match(cc, &LogicalPlanType::Distinct),
+                LogicalPlan::Join(_) => self.does_match(cc, &LogicalPlanType::Join),
+                _ => 0,
+            };
+
+            // We have a complete match if this condition is met
+            if self.current_idx >= self.search_criteria.len() {
+                self.match_found = true;
+
+                // All criteria has been met. This constitutes a successful location of all search criteria
+                // move the Nth elements from the `left_plan_nodes` into the `match_plan_nodes`
+                for _idx in &self.search_criteria {
+                    self.match_plan_nodes
+                        .push(self.left_plan_nodes.pop().unwrap());
+                }
+            }
+        } else {
+            // We already have a complete search criteria match, that means anything encountered and and beyond should be included
+            // in the `right_plan_side` of the search results
+            self.right_plan_nodes.push(plan.clone());
+        }
+
+        Ok(true)
+    }
+
+    fn post_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        Ok(true)
+    }
+}
+
+impl<T> OptimizationStrategy for OptimizablePlanBackup<T> 
+    where T: PlanVisitor {
+
+    fn optimize(&mut self) -> LogicalPlan {
+        self.original_plan.clone()
+    }
+
+    fn rebuild(&mut self) -> LogicalPlan {
         let mut builder: LogicalPlanBuilder = LogicalPlanBuilder::empty(false);
 
         // Plans are build in reverse. Start with the `right_plan_nodes` and also
@@ -228,66 +306,53 @@ where
         }
 
         builder.build().unwrap()
-    }
 
-    /// Utility method for checking if the `current_criteria` node matches
-    /// the `LogicalPlan` variant. If so the `current_idx` is incremented.
-    fn does_match(
-        &self,
-        left_plan_type: &LogicalPlanType,
-        right_plan_type: &LogicalPlanType,
-    ) -> usize {
-        if *left_plan_type == *right_plan_type {
-            self.current_idx + 1
-        } else {
-            0
-        }
     }
 }
 
-impl<T> PlanVisitor for OptimizablePlan<T>
-where
-    T: PlanVisitor,
-{
-    type Error = DataFusionError;
 
-    fn pre_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
-        // Ok lets see if we can match the search_criteria against these nodes
-        if !self.match_found {
-            // Push the current plan node into the left_plan_nodes, if a match is later determined it will be popped and moved
-            self.left_plan_nodes.push(plan.clone());
+/// Represents a strategy that can be used to optimize a `LogicalPlan`. While all implementations
+/// of a strategy will be different they share these same methods for interaction with the higher
+/// level `OptimizablePlanCtx`
+pub trait OptimizationStrategy : PlanVisitor {
 
-            let cc = self.search_criteria.get(self.current_idx).unwrap();
-            self.current_idx = match plan {
-                LogicalPlan::Aggregate(_) => self.does_match(cc, &LogicalPlanType::Aggregate),
-                LogicalPlan::CrossJoin(_) => self.does_match(cc, &LogicalPlanType::CrossJoin),
-                LogicalPlan::Distinct(_) => self.does_match(cc, &LogicalPlanType::Distinct),
-                LogicalPlan::Join(_) => self.does_match(cc, &LogicalPlanType::Join),
-                _ => 0,
-            };
+    /// Invokes the main portion of the optimization
+    fn optimize(&mut self) -> LogicalPlan;
 
-            // We have a complete match if this condition is met
-            if self.current_idx >= self.search_criteria.len() {
-                self.match_found = true;
+    /// During the course of optimization there exists the possibility that the input `LogicalPlan`
+    /// has been "broken apart" and modified. This method is invoked to rebuild those disparate pieces
+    /// back into a single, optimized, `LogicalPlan`
+    fn rebuild(&mut self) -> LogicalPlan;
+}
 
-                // All criteria has been met. This constitutes a successful location of all search criteria
-                // move the Nth elements from the `left_plan_nodes` into the `match_plan_nodes`
-                for _idx in &self.search_criteria {
-                    self.match_plan_nodes
-                        .push(self.left_plan_nodes.pop().unwrap());
-                }
-            }
-        } else {
-            // We already have a complete search criteria match, that means anything encountered and and beyond should be included
-            // in the `right_plan_side` of the search results
-            self.right_plan_nodes.push(plan.clone());
+pub struct OptimizablePlanCtx<T> {
+    input_plan: LogicalPlan,
+    optimizer_strategy: T,
+}
+
+impl<T> OptimizablePlanCtx<T> where
+    T: OptimizationStrategy {
+
+    pub fn new(input_plan: LogicalPlan,
+            optimizer_strategy: T) -> Self {
+        Self {
+            input_plan,
+            optimizer_strategy,
         }
-
-        Ok(true)
     }
 
-    fn post_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
-        Ok(true)
+    /// Invokes the optimization strategy taht is configured in this context
+    pub fn optimize(&mut self) -> LogicalPlan {
+        // First invoke the visitor to build used the needed context for the optimization strategy
+        let visit_result = self.input_plan.accept(&mut self.optimizer_strategy);
+        println!("After visiting the input plan");
+        self.input_plan.clone()
+    }
+
+    /// Takes the current `left_plan_nodes`, `match_plan_nodes` and `right_plan_nodes` and rebuilds
+    /// a complete `LogicalPlan`
+    pub fn rebuild(&mut self) -> LogicalPlan {
+        self.optimizer_strategy.rebuild()
     }
 }
 
@@ -362,31 +427,31 @@ mod test {
             .project(vec![col("id")])?
             .build()?;
 
-        // Creates an `OptimizablePlan` instance with a `search_criteria` that
-        // dictates the nodes that should be search for
-        let mut opt_plan = utils::OptimizablePlan::new(
-            logical_plan.clone(),
-            vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
-            EndOfNeedVisitor {
-                original_plan: logical_plan.clone(),
-                last_seen_node_map: HashMap::new(),
-            },
-        );
+        // // Creates an `OptimizablePlan` instance with a `search_criteria` that
+        // // dictates the nodes that should be search for
+        // let mut opt_plan = utils::OptimizablePlanCtx::new(
+        //     logical_plan.clone(),
+        //     vec![LogicalPlanType::Distinct, LogicalPlanType::Distinct],
+        //     EndOfNeedVisitor {
+        //         original_plan: logical_plan.clone(),
+        //         last_seen_node_map: HashMap::new(),
+        //     },
+        // );
 
-        // Attempts to locate the interesting area of the Optimizer
-        opt_plan.find();
+        // // Attempts to locate the interesting area of the Optimizer
+        // opt_plan.find();
 
-        // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
-        // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
-        // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
-        opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
-            .distinct()?
-            .build()?]);
+        // // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
+        // // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
+        // // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
+        // opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
+        //     .distinct()?
+        //     .build()?]);
 
-        // Rebuilds a single `LogicalPlan` instance from all the moving parts
-        let optimized_plan: LogicalPlan = opt_plan.rebuild();
+        // // Rebuilds a single `LogicalPlan` instance from all the moving parts
+        // let optimized_plan: LogicalPlan = opt_plan.rebuild();
 
-        println!("Optimized Plan: \n{:?}", optimized_plan);
+        // println!("Optimized Plan: \n{:?}", optimized_plan);
 
         Ok(())
     }
@@ -440,31 +505,20 @@ mod test {
             .project(vec![sum(col("df.a")), col("df2.b")])?
             .build()?;
 
-        // Creates an `OptimizablePlan` instance with a `search_criteria` that
-        // dictates the nodes that should be search for
-        let mut opt_plan = utils::OptimizablePlan::new(
+        // Create the optimization context which consists of
+        // - The `LogicalPlan` to be optimized
+        // - The `PlanVisitor` implementation for traversing the plan and observing the required data points
+        // - The `OptimizationStrategy` which uses those observed data points to modify/optimize the plan.
+        let mut optimization_ctx = utils::OptimizablePlanCtx::new(
             plan.clone(),
-            // TODO: This is wrong
-            vec![LogicalPlanType::DISTINCT, LogicalPlanType::DISTINCT],
             EndOfNeedVisitor {
                 original_plan: plan.clone(),
                 last_seen_node_map: HashMap::new(),
             },
         );
 
-        // Attempts to locate the interesting area of the Optimizer
-        opt_plan.find();
-
-        // opt_plan.print_map();
-
-        // opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
-        //     .distinct()?
-        //     .build()?]);
-
-        // // Rebuilds a single `LogicalPlan` instance from all the moving parts
-        // let optimized_plan: LogicalPlan = opt_plan.rebuild();
-
-        // println!("Optimized Plan: \n{:?}", optimized_plan);
+        let optimized_plan = optimization_ctx.optimize();
+        println!("Optimized Plan: \n{:?}", optimized_plan);
 
         Ok(())
     }
