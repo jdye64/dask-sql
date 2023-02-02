@@ -5,6 +5,7 @@ import warnings
 from collections import Counter
 from typing import Any, Callable, Dict, List, Tuple, Union
 
+import cudf
 import dask.dataframe as dd
 import pandas as pd
 from dask import config as dask_config
@@ -450,6 +451,14 @@ class Context:
             replace=replace,
             schema_name=schema_name,
         )
+
+    def sql_cudf(
+        self,
+        sql: Any,
+    ) -> cudf.DataFrame:
+        rel, _ = self._get_ral(sql)
+        cudf_code = self.context.cudf_code_from_plan(rel)
+        return cudf_code
 
     def sql(
         self,

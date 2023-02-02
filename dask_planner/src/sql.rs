@@ -624,6 +624,48 @@ impl DaskSQLContext {
         .unwrap();
         Ok(PyLogicalPlan::from(result))
     }
+
+    /// Creates Rapids cuDF code from a LogicalPlan instance
+    pub fn cudf_code_from_plan(&self, plan: PyLogicalPlan, py: Python) -> PyResult<String> {
+        let mut cudf_visitor = CUDFCodeGenerator {
+            cudf_code: String::new(),
+        };
+        let _result = plan.original_plan.accept(&mut cudf_visitor);
+
+        // // Need to make sure we return the 'df' to the calling 'exec' code
+        // cudf_visitor.cudf_code.push_str("\nreturn df");
+
+        Ok(cudf_visitor.cudf_code)
+    }
+}
+
+pub struct CUDFCodeGenerator {
+    cudf_code: String,
+}
+
+impl PlanVisitor for CUDFCodeGenerator {
+    type Error = DataFusionError;
+
+    fn pre_visit(&mut self, _plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        Ok(true)
+    }
+
+    fn post_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
+        match plan {
+            LogicalPlan::TableScan(_scan) => {
+                self.cudf_code.push_str(
+                    format!(
+                        "df = cudf.read_csv('{}')",
+                        "/home/jeremy/Desktop/arrow-datafusion-python/examples/tips.csv"
+                    )
+                    .as_str(),
+                );
+            }
+            _ => (),
+        }
+
+        Ok(true)
+    }
 }
 
 /// non-Python methods
