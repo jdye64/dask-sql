@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ::std::sync::{Arc, Mutex};
 use pyo3::prelude::*;
 
-use super::types::PyDataType;
+use datafusion_python::common::data_type::PyDataType;
 use crate::sql::{function::DaskFunction, table};
 
 #[pyclass(name = "DaskSchema", module = "dask_planner", subclass)]

@@ -1,10 +1,11 @@
 use std::{any::Any, sync::Arc};
 
-use arrow::datatypes::{DataType, Field, SchemaRef};
+use datafusion::arrow::datatypes::{DataType, Field, SchemaRef};
 use async_trait::async_trait;
 use datafusion_common::DFField;
 use datafusion_expr::{Expr, LogicalPlan, TableProviderFilterPushDown, TableSource};
 use datafusion_optimizer::utils::split_conjunction;
+use datafusion_python::common::data_type::{DataTypeMap, SqlType};
 use datafusion_sql::TableReference;
 use pyo3::prelude::*;
 
@@ -16,8 +17,6 @@ use crate::{
         types::{
             rel_data_type::RelDataType,
             rel_data_type_field::RelDataTypeField,
-            DaskTypeMap,
-            SqlTypeName,
         },
     },
 };
@@ -90,7 +89,7 @@ pub struct DaskTable {
     pub(crate) table_name: String,
     #[allow(dead_code)]
     pub(crate) statistics: DaskStatistics,
-    pub(crate) columns: Vec<(String, DaskTypeMap)>,
+    pub(crate) columns: Vec<(String, DataTypeMap)>,
 }
 
 #[pymethods]
@@ -107,7 +106,7 @@ impl DaskTable {
 
     // TODO: Really wish we could accept a SqlTypeName instance here instead of a String for `column_type` ....
     #[pyo3(name = "add_column")]
-    pub fn add_column(&mut self, column_name: &str, type_map: DaskTypeMap) {
+    pub fn add_column(&mut self, column_name: &str, type_map: DataTypeMap) {
         self.columns.push((column_name.to_owned(), type_map));
     }
 
@@ -163,15 +162,12 @@ pub(crate) fn table_from_logical_plan(
             let tbl_schema: SchemaRef = tbl_provider.schema();
             let fields: &Vec<Field> = tbl_schema.fields();
 
-            let mut cols: Vec<(String, DaskTypeMap)> = Vec::new();
+            let mut cols: Vec<(String, DataTypeMap)> = Vec::new();
             for field in fields {
                 let data_type: &DataType = field.data_type();
                 cols.push((
                     String::from(field.name()),
-                    DaskTypeMap::from(
-                        SqlTypeName::from_arrow(data_type)?,
-                        data_type.clone().into(),
-                    ),
+                    DataTypeMap::map_from_arrow_type(data_type), 
                 ));
             }
 
@@ -202,12 +198,12 @@ pub(crate) fn table_from_logical_plan(
         LogicalPlan::EmptyRelation(empty_relation) => {
             let fields: &Vec<DFField> = empty_relation.schema.fields();
 
-            let mut cols: Vec<(String, DaskTypeMap)> = Vec::new();
+            let mut cols: Vec<(String, DataTypeMap)> = Vec::new();
             for field in fields {
                 let data_type: &DataType = field.data_type();
                 cols.push((
                     String::from(field.name()),
-                    DaskTypeMap::from(
+                    DataTypeMap::from(
                         SqlTypeName::from_arrow(data_type)?,
                         data_type.clone().into(),
                     ),

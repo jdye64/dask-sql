@@ -7,6 +7,7 @@ mod expression;
 mod parser;
 mod sql;
 
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -20,9 +21,9 @@ fn rust(py: Python, m: &PyModule) -> PyResult<()> {
     // Register the python classes
     m.add_class::<expression::PyExpr>()?;
     m.add_class::<sql::DaskSQLContext>()?;
-    m.add_class::<sql::types::SqlTypeName>()?;
+    m.add_class::<datafusion_python::common::data_type::SqlType>()?;
     m.add_class::<sql::types::RexType>()?;
-    m.add_class::<sql::types::DaskTypeMap>()?;
+    m.add_class::<datafusion_python::common::data_type::DataTypeMap>()?;
     m.add_class::<sql::types::rel_data_type::RelDataType>()?;
     m.add_class::<sql::statement::PyStatement>()?;
     m.add_class::<sql::schema::DaskSchema>()?;

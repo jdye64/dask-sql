@@ -10,11 +10,12 @@ use datafusion_sql::sqlparser::{
     parser::{Parser, ParserError},
     tokenizer::{Token, Tokenizer},
 };
+use datafusion_python::common::data_type::SqlType;
 use pyo3::prelude::*;
 
 use crate::{
     dialect::DaskDialect,
-    sql::{exceptions::py_type_err, parser_utils::DaskParserUtils, types::SqlTypeName},
+    sql::{exceptions::py_type_err, parser_utils::DaskParserUtils},
 };
 
 macro_rules! parser_err {
