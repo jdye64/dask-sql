@@ -70,11 +70,7 @@ use datafusion_expr::{
     Expr};
 use datafusion_optimizer::{OptimizerConfig, OptimizerRule, optimizer::ApplyOrder};
 
-use crate::sql::optimizer::utils::{OptimizationStrategy, fusion::PlanFusion};
-use crate::sql::optimizer::utils::column::ColumnIndexBuilder;
-use crate::sql::optimizer::utils::dissect::Dissector;
-use crate::sql::optimizer::utils::dissect::JoinDissector;
-use crate::sql::optimizer::utils::fusion::PreFoundIndexFusion;
+use super::utils::{OptimizablePlanCtx, LogicalPlanType};
 
 
 /// Optimizer rule dropping join key columns post join
@@ -96,13 +92,6 @@ impl OptimizerRule for FilterColumnsPostJoin {
         _optimizer_config: &dyn OptimizerConfig,
     ) -> Result<Option<LogicalPlan>> {
 
-        // Build out the index of the last seen location for each column
-        let _optimized_plan = ColumnIndexBuilder::new().optimize(&plan);
-
-        // Split the Logical plan into "slices" of the complete plan
-        let mut join_dissector = JoinDissector::new();
-        let _slices: Vec<LogicalPlan> = join_dissector.dissect(&plan);
-
         // Build the projection `LogicalPlan` node to be inserted
         let exprs = vec![
             Expr::Column(
@@ -112,13 +101,21 @@ impl OptimizerRule for FilterColumnsPostJoin {
                 Column { relation: Some("df".to_string()), name: "a".to_string() }
             )
         ];
-        let input = Arc::new(join_dissector.slices[join_dissector.join_idxs[0]].clone());
+        let input = Arc::new(plan.inputs()[0].clone());
         let node = LogicalPlan::Projection(
             datafusion_expr::logical_plan::Projection::try_new(exprs, input)?
         );
 
-        let r_plan = PreFoundIndexFusion::new().fuse(join_dissector.slices, join_dissector.join_idxs, node);
-        Ok(Some(r_plan.clone()))
+        // Builds a OptimizerCtx where the plan can be sliced and diced as needed. This context can then 
+        //further have `modification` operations occur on it
+        let optimized_plan = OptimizablePlanCtx::new(plan.clone())
+            .build_index()
+            .slice_at(LogicalPlanType::Join)
+            .insert_before(node)
+            .build();
+        
+        Ok(optimized_plan)
+
     }
 
     fn name(&self) -> &str {

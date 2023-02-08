@@ -25,7 +25,7 @@ impl PreFoundIndexFusion {
         }
     }
 
-    fn fuse_match_gap(mut idx: usize, next_match_idx: usize, slices: &Vec<LogicalPlan>, cur_plan: LogicalPlan) -> LogicalPlan {
+    fn fuse_match_gap(&self, mut idx: usize, next_match_idx: usize, slices: &Vec<LogicalPlan>, cur_plan: LogicalPlan) -> LogicalPlan {
 
         let mut plan = cur_plan.clone();
 
@@ -63,7 +63,7 @@ impl PlanFusion for PreFoundIndexFusion {
             if has_match {
                 // If multiple matches exist. we need to fuse the "gap" between this match
                 // and the next match in the loop
-                plan = PreFoundIndexFusion::fuse_match_gap(last_idx - 1, *idx, &input_splits, plan);
+                plan = self.fuse_match_gap(last_idx - 1, *idx, &input_splits, plan);
             } else {
                 has_match = true;
             }
@@ -74,6 +74,6 @@ impl PlanFusion for PreFoundIndexFusion {
         }
 
         // Fuse the remaining bridge
-        PreFoundIndexFusion::fuse_match_gap(last_idx - 1, 0, &input_splits, plan)
+        self.fuse_match_gap(last_idx - 1, 0, &input_splits, plan)
     }
 }
