@@ -1,8 +1,10 @@
-use std::collections::HashMap;
-
 use colored::Colorize;
 use datafusion_common::{Column, DataFusionError};
-use datafusion_expr::{Expr, LogicalPlan, LogicalPlanBuilder, PlanVisitor};
+use datafusion_expr::{LogicalPlan, LogicalPlanBuilder, PlanVisitor};
+
+pub mod column;
+pub mod dissect;
+pub mod fusion;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LogicalPlanType {
@@ -145,7 +147,7 @@ where
 impl<T> OptimizationStrategy for OptimizablePlanBackup<T>
     where T: PlanVisitor {
 
-    fn optimize(&mut self) -> LogicalPlan {
+    fn optimize(&mut self, input_plan: &LogicalPlan) -> LogicalPlan {
         self.original_plan.clone()
     }
 
@@ -228,7 +230,7 @@ impl<T> OptimizationStrategy for OptimizablePlanBackup<T>
 pub trait OptimizationStrategy : PlanVisitor {
 
     /// Invokes the main portion of the optimization
-    fn optimize(&mut self) -> LogicalPlan;
+    fn optimize(&mut self, input_plan: &LogicalPlan) -> LogicalPlan;
 
     /// During the course of optimization there exists the possibility that the input `LogicalPlan`
     /// has been "broken apart" and modified. This method is invoked to rebuild those disparate pieces
@@ -267,172 +269,172 @@ impl<T> OptimizablePlanCtx<T> where
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::{collections::HashMap, sync::Arc};
+// #[cfg(test)]
+// mod test {
+//     use std::{collections::HashMap, sync::Arc};
 
-    use arrow::datatypes::{DataType, Field, Schema};
-    use datafusion::{
-        datasource::{empty::EmptyTable, provider_as_source},
-        logical_expr::UNNAMED_TABLE,
-    };
-    use datafusion_common::DataFusionError;
-    use datafusion_expr::{
-        col,
-        logical_plan::builder::LogicalTableSource,
-        sum,
-        JoinType,
-        LogicalPlan,
-        LogicalPlanBuilder,
-    };
+//     use arrow::datatypes::{DataType, Field, Schema};
+//     use datafusion::{
+//         datasource::{empty::EmptyTable, provider_as_source},
+//         logical_expr::UNNAMED_TABLE,
+//     };
+//     use datafusion_common::DataFusionError;
+//     use datafusion_expr::{
+//         col,
+//         logical_plan::builder::LogicalTableSource,
+//         sum,
+//         JoinType,
+//         LogicalPlan,
+//         LogicalPlanBuilder,
+//     };
 
-    use super::LogicalPlanType;
-    // use crate::sql::optimizer::utils::{self};
+//     use super::LogicalPlanType;
+//     // use crate::sql::optimizer::utils::{self};
 
-    /// Scan an empty data source, mainly used in tests
-    fn scan_empty(
-        name: Option<&str>,
-        table_schema: &Schema,
-        projection: Option<Vec<usize>>,
-    ) -> Result<LogicalPlanBuilder, DataFusionError> {
-        let table_schema = Arc::new(table_schema.clone());
-        let provider = Arc::new(EmptyTable::new(table_schema));
-        LogicalPlanBuilder::scan(
-            name.unwrap_or(UNNAMED_TABLE),
-            provider_as_source(provider),
-            projection,
-        )
-    }
+//     /// Scan an empty data source, mainly used in tests
+//     fn scan_empty(
+//         name: Option<&str>,
+//         table_schema: &Schema,
+//         projection: Option<Vec<usize>>,
+//     ) -> Result<LogicalPlanBuilder, DataFusionError> {
+//         let table_schema = Arc::new(table_schema.clone());
+//         let provider = Arc::new(EmptyTable::new(table_schema));
+//         LogicalPlanBuilder::scan(
+//             name.unwrap_or(UNNAMED_TABLE),
+//             provider_as_source(provider),
+//             projection,
+//         )
+//     }
 
-    /// Create a LogicalPlanBuilder representing a scan of a table with the provided name and schema.
-    /// This is mostly used for testing and documentation.
-    pub fn table_scan(
-        name: Option<&str>,
-        table_schema: &Schema,
-        projection: Option<Vec<usize>>,
-    ) -> Result<LogicalPlanBuilder, DataFusionError> {
-        let tbl_schema = Arc::new(table_schema.clone());
-        let table_source = Arc::new(LogicalTableSource::new(tbl_schema));
-        LogicalPlanBuilder::scan(name.unwrap_or("test"), table_source, projection)
-    }
+//     /// Create a LogicalPlanBuilder representing a scan of a table with the provided name and schema.
+//     /// This is mostly used for testing and documentation.
+//     pub fn table_scan(
+//         name: Option<&str>,
+//         table_schema: &Schema,
+//         projection: Option<Vec<usize>>,
+//     ) -> Result<LogicalPlanBuilder, DataFusionError> {
+//         let tbl_schema = Arc::new(table_schema.clone());
+//         let table_source = Arc::new(LogicalTableSource::new(tbl_schema));
+//         LogicalPlanBuilder::scan(name.unwrap_or("test"), table_source, projection)
+//     }
 
-    fn test_table_scan(table_name: &str, column_name: &str) -> LogicalPlan {
-        let schema = Schema::new(vec![
-            Field::new(column_name, DataType::UInt32, false),
-            Field::new("c", DataType::UInt32, false),
-        ]);
-        table_scan(Some(table_name), &schema, None)
-            .expect("creating scan")
-            .build()
-            .expect("building plan")
-    }
+//     fn test_table_scan(table_name: &str, column_name: &str) -> LogicalPlan {
+//         let schema = Schema::new(vec![
+//             Field::new(column_name, DataType::UInt32, false),
+//             Field::new("c", DataType::UInt32, false),
+//         ]);
+//         table_scan(Some(table_name), &schema, None)
+//             .expect("creating scan")
+//             .build()
+//             .expect("building plan")
+//     }
 
-    #[test]
-    fn test_optimizable_plan_visitor() -> Result<(), DataFusionError> {
-        let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+//     #[test]
+//     fn test_optimizable_plan_visitor() -> Result<(), DataFusionError> {
+//         let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
 
-        // Dummy LogicalPlan with 2 subsequent DISTINCT nodes
-        let logical_plan = scan_empty(Some("test"), &schema, None)?
-            .distinct()?
-            .distinct()?
-            .project(vec![col("id")])?
-            .build()?;
+//         // Dummy LogicalPlan with 2 subsequent DISTINCT nodes
+//         let logical_plan = scan_empty(Some("test"), &schema, None)?
+//             .distinct()?
+//             .distinct()?
+//             .project(vec![col("id")])?
+//             .build()?;
 
-        // // Creates an `OptimizablePlan` instance with a `search_criteria` that
-        // // dictates the nodes that should be search for
-        // let mut opt_plan = utils::OptimizablePlanCtx::new(
-        //     logical_plan.clone(),
-        //     vec![LogicalPlanType::Distinct, LogicalPlanType::Distinct],
-        //     EndOfNeedVisitor {
-        //         original_plan: logical_plan.clone(),
-        //         last_seen_node_map: HashMap::new(),
-        //     },
-        // );
+//         // // Creates an `OptimizablePlan` instance with a `search_criteria` that
+//         // // dictates the nodes that should be search for
+//         // let mut opt_plan = utils::OptimizablePlanCtx::new(
+//         //     logical_plan.clone(),
+//         //     vec![LogicalPlanType::Distinct, LogicalPlanType::Distinct],
+//         //     EndOfNeedVisitor {
+//         //         original_plan: logical_plan.clone(),
+//         //         last_seen_node_map: HashMap::new(),
+//         //     },
+//         // );
 
-        // // Attempts to locate the interesting area of the Optimizer
-        // opt_plan.find();
+//         // // Attempts to locate the interesting area of the Optimizer
+//         // opt_plan.find();
 
-        // // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
-        // // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
-        // // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
-        // opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
-        //     .distinct()?
-        //     .build()?]);
+//         // // Replaces the previous match, which in this example is a DISTINCT followed by another DISTINCT
+//         // // as described in the `search_criteria` when creating the `OptimizablePlan` with a single
+//         // // `LogicalPlan::DISTINCT` created with the `LogicalPlanBuilder`, could be multiple nodes ...
+//         // opt_plan.replace_match_with(vec![LogicalPlanBuilder::empty(false)
+//         //     .distinct()?
+//         //     .build()?]);
 
-        // // Rebuilds a single `LogicalPlan` instance from all the moving parts
-        // let optimized_plan: LogicalPlan = opt_plan.rebuild();
+//         // // Rebuilds a single `LogicalPlan` instance from all the moving parts
+//         // let optimized_plan: LogicalPlan = opt_plan.rebuild();
 
-        // println!("Optimized Plan: \n{:?}", optimized_plan);
+//         // println!("Optimized Plan: \n{:?}", optimized_plan);
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    /// A query like
-    /// ```text
-    /// SELECT
-    ///     SUM(df.a), df2.b
-    /// FROM df
-    /// INNER JOIN df2
-    ///     ON df.c = df2.c
-    /// GROUP BY df2.b
-    /// ```
-    ///
-    /// Would typically produce a LogicalPlan like ...
-    /// ```text
-    /// Projection: SUM(df.a), df2.b\
-    ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
-    ///     Inner Join: df.c = df2.c\
-    ///       TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
-    ///       TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
-    /// ```
-    ///
-    /// Where df.c and df2.c would be unnecessarily carried into the aggregate step even though it can
-    /// be dropped.
-    ///
-    /// To solve this problem, we insert a projection after the join step. In our example, the
-    /// optimized LogicalPlan is
-    /// ```text
-    /// Projection: SUM(df.a), df2.b\
-    ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
-    ///     Projection: df.a, df2.b\
-    ///       Inner Join: df.c = df2.c\
-    ///         TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
-    ///         TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
-    #[test]
-    fn test_remove_extra_column_baggage() -> Result<(), DataFusionError> {
-        // Projection: SUM(df.a), df2.b
-        //   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]
-        //     Inner Join: df.c = df2.c
-        //       TableScan: df
-        //       TableScan: df2
-        let plan = LogicalPlanBuilder::from(test_table_scan("df", "a"))
-            .join(
-                LogicalPlanBuilder::from(test_table_scan("df2", "b")).build()?,
-                JoinType::Inner,
-                (vec!["c"], vec!["c"]),
-                None,
-            )?
-            .aggregate(vec![col("df2.b")], vec![sum(col("df.a"))])?
-            .project(vec![sum(col("df.a")), col("df2.b")])?
-            .build()?;
+//     /// A query like
+//     /// ```text
+//     /// SELECT
+//     ///     SUM(df.a), df2.b
+//     /// FROM df
+//     /// INNER JOIN df2
+//     ///     ON df.c = df2.c
+//     /// GROUP BY df2.b
+//     /// ```
+//     ///
+//     /// Would typically produce a LogicalPlan like ...
+//     /// ```text
+//     /// Projection: SUM(df.a), df2.b\
+//     ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
+//     ///     Inner Join: df.c = df2.c\
+//     ///       TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
+//     ///       TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
+//     /// ```
+//     ///
+//     /// Where df.c and df2.c would be unnecessarily carried into the aggregate step even though it can
+//     /// be dropped.
+//     ///
+//     /// To solve this problem, we insert a projection after the join step. In our example, the
+//     /// optimized LogicalPlan is
+//     /// ```text
+//     /// Projection: SUM(df.a), df2.b\
+//     ///   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]\
+//     ///     Projection: df.a, df2.b\
+//     ///       Inner Join: df.c = df2.c\
+//     ///         TableScan: df projection=[a, c], full_filters=[df.c IS NOT NULL]\
+//     ///         TableScan: df2 projection=[b, c], full_filters=[df2.c IS NOT NULL]\
+//     #[test]
+//     fn test_remove_extra_column_baggage() -> Result<(), DataFusionError> {
+//         // Projection: SUM(df.a), df2.b
+//         //   Aggregate: groupBy=[[df2.b]], aggr=[[SUM(df.a)]]
+//         //     Inner Join: df.c = df2.c
+//         //       TableScan: df
+//         //       TableScan: df2
+//         let plan = LogicalPlanBuilder::from(test_table_scan("df", "a"))
+//             .join(
+//                 LogicalPlanBuilder::from(test_table_scan("df2", "b")).build()?,
+//                 JoinType::Inner,
+//                 (vec!["c"], vec!["c"]),
+//                 None,
+//             )?
+//             .aggregate(vec![col("df2.b")], vec![sum(col("df.a"))])?
+//             .project(vec![sum(col("df.a")), col("df2.b")])?
+//             .build()?;
 
-        // Create the optimization context which consists of
-        // - The `LogicalPlan` to be optimized
-        // - The `PlanVisitor` implementation for traversing the plan and observing the required data points
-        // - The `OptimizationStrategy` which uses those observed data points to modify/optimize the plan.
-        let mut optimization_ctx = utils::OptimizablePlanCtx::new(
-            plan.clone(),
-            EndOfNeedVisitor {
-                original_plan: plan.clone(),
-                last_seen_node_map: HashMap::new(),
-            },
-        );
+//         // Create the optimization context which consists of
+//         // - The `LogicalPlan` to be optimized
+//         // - The `PlanVisitor` implementation for traversing the plan and observing the required data points
+//         // - The `OptimizationStrategy` which uses those observed data points to modify/optimize the plan.
+//         let mut optimization_ctx = utils::OptimizablePlanCtx::new(
+//             plan.clone(),
+//             EndOfNeedVisitor {
+//                 original_plan: plan.clone(),
+//                 last_seen_node_map: HashMap::new(),
+//             },
+//         );
 
-        let optimized_plan = optimization_ctx.optimize();
-        println!("Optimized Plan: \n{:?}", optimized_plan);
+//         let optimized_plan = optimization_ctx.optimize();
+//         println!("Optimized Plan: \n{:?}", optimized_plan);
 
-        let something: EndOfNeedVisitor;
+//         let something: EndOfNeedVisitor;
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }

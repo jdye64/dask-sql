@@ -4,9 +4,9 @@ use colored::Colorize;
 use datafusion_common::{Column, DataFusionError};
 use datafusion_expr::{Expr, LogicalPlan, LogicalPlanBuilder, PlanVisitor};
 
-/// Represents an optimization routine that searches for the last necessary position of a Rex.
-/// Ex: Find the last location that a column is needed so that it can be removed and not shuffled
-/// around in downstream operations
+/// Represents an optimization routine that searches for the last necessary position of a Expr.
+/// Ex: Find the last location that a column is needed so that it can be removed and not included
+/// in subsequent shuffles and downstream operations un-necessarily
 /// Ex: Push joins down further into the execution stack
 pub struct EndOfNeedVisitor {
     original_plan: LogicalPlan,
@@ -41,7 +41,6 @@ impl PlanVisitor for EndOfNeedVisitor {
 
     // Update the last_seen_node_map with the last used location of each Column
     fn post_visit(&mut self, plan: &LogicalPlan) -> std::result::Result<bool, DataFusionError> {
-        println!("Post_Visit: {:?}", plan);
         let col_names: Vec<String> = match plan {
             // LogicalPlan::Aggregate(agg) => agg.
             // LogicalPlan::Distinct(distinct) => distinct.
