@@ -7,8 +7,10 @@ use pyo3::prelude::*;
 
 use crate::{
     expression::PyExpr,
-    sql::{exceptions::py_type_err, logical},
+    sql::{exceptions::py_type_err},
 };
+
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 #[pyclass(name = "RepartitionBy", module = "dask_planner", subclass)]
 pub struct PyRepartitionBy {
@@ -18,7 +20,7 @@ pub struct PyRepartitionBy {
 #[pymethods]
 impl PyRepartitionBy {
     #[pyo3(name = "getSelectQuery")]
-    fn get_select_query(&self) -> PyResult<logical::PyLogicalPlan> {
+    fn get_select_query(&self) -> PyResult<PyLogicalPlan> {
         let log_plan = &*(self.repartition.input).clone();
         Ok(log_plan.clone().into())
     }

@@ -30,6 +30,8 @@ try:
 except ImportError:  # pragma: no cover
     pass
 
+from datafusion.expr import Projection
+
 from dask_sql import input_utils
 from dask_sql.datacontainer import (
     UDF,
@@ -846,7 +848,7 @@ class Context:
         else:
             rel = nonOptimizedRel
 
-        rel_string = rel.explain_original()
+        rel_string = rel.display_indent()
         logger.debug(f"_get_ral -> LogicalPlan: {rel}")
         logger.debug(f"Extracted relational algebra:\n {rel_string}")
 
@@ -855,33 +857,33 @@ class Context:
     def _compute_table_from_rel(self, rel: "LogicalPlan", return_futures: bool = True):
         dc = RelConverter.convert(rel, context=self)
 
-        # Optimization might remove some alias projects. Make sure to keep them here.
-        select_names = [field for field in rel.getRowType().getFieldList()]
+        # # Optimization might remove some alias projects. Make sure to keep them here.
+        # select_names = [field for field in rel.getRowType().getFieldList()]
 
-        if rel.get_current_node_type() == "Explain":
-            return dc
-        if dc is None:
-            return
+        # if rel.get_current_node_type() == "Explain":
+        #     return dc
+        # if dc is None:
+        #     return
 
-        if select_names:
-            # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
-            # names the output col is prepended with the fully qualified column name
-            field_counts = Counter([field.getName() for field in select_names])
-            select_names = [
-                field.getQualifiedName()
-                if field_counts[field.getName()] > 1
-                else field.getName()
-                for field in select_names
-            ]
+        # if select_names:
+        #     # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
+        #     # names the output col is prepended with the fully qualified column name
+        #     field_counts = Counter([field.getName() for field in select_names])
+        #     select_names = [
+        #         field.getQualifiedName()
+        #         if field_counts[field.getName()] > 1
+        #         else field.getName()
+        #         for field in select_names
+        #     ]
 
-            cc = dc.column_container
-            cc = cc.rename(
-                {
-                    df_col: select_name
-                    for df_col, select_name in zip(cc.columns, select_names)
-                }
-            )
-            dc = DataContainer(dc.df, cc)
+        #     cc = dc.column_container
+        #     cc = cc.rename(
+        #         {
+        #             df_col: select_name
+        #             for df_col, select_name in zip(cc.columns, select_names)
+        #         }
+        #     )
+        #     dc = DataContainer(dc.df, cc)
 
         df = dc.assign()
         if not return_futures:

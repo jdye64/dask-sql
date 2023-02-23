@@ -21,10 +21,11 @@ use crate::{
     error::{DaskPlannerError, Result},
     sql::{
         exceptions::{py_runtime_err, py_type_err},
-        logical,
         types::RexType,
     },
 };
+
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// An PyExpr that can be used on a DataFrame
 #[pyclass(name = "Expression", module = "datafusion", subclass)]
@@ -146,7 +147,7 @@ impl PyExpr {
     /// Extracts the LogicalPlan from a Subquery, or supported Subquery sub-type, from
     /// the expression instance
     #[pyo3(name = "getSubqueryLogicalPlan")]
-    pub fn subquery_plan(&self) -> PyResult<logical::PyLogicalPlan> {
+    pub fn subquery_plan(&self) -> PyResult<PyLogicalPlan> {
         match &self.expr {
             Expr::ScalarSubquery(subquery) => Ok(subquery.subquery.as_ref().clone().into()),
             _ => Err(py_type_err(format!(
@@ -249,8 +250,8 @@ impl PyExpr {
     }
 
     /// Python friendly shim code to get the name of a column referenced by an expression
-    pub fn column_name(&self, mut plan: logical::PyLogicalPlan) -> PyResult<String> {
-        self._column_name(&plan.current_node())
+    pub fn column_name(&self, plan: PyLogicalPlan) -> PyResult<String> {
+        self._column_name(&plan.plan())
             .map_err(py_runtime_err)
     }
 

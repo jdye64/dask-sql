@@ -30,35 +30,21 @@ class DaskProjectPlugin(BaseRelPlugin):
         df = dc.df
         cc = dc.column_container
 
-        # Collect all (new) columns
-        proj = rel.projection()
-        named_projects = proj.getNamedProjects()
-
         column_names = []
         new_columns = {}
         new_mappings = {}
 
         # Collect all (new) columns this Projection will limit to
-        for key, expr in named_projects:
-            key = str(key)
-            column_names.append(key)
+        for expr in rel.projections():
+            column_names.append(expr.display_name())
 
-            # shortcut: if we have a column already, there is no need to re-assign it again
-            # this is only the case if the expr is a RexInputRef
-            if expr.getRexType() == RexType.Reference:
-                index = expr.getIndex()
-                backend_column_name = cc.get_backend_by_frontend_index(index)
-                logger.debug(
-                    f"Not re-adding the same column {key} (but just referencing it)"
-                )
-                new_mappings[key] = backend_column_name
-            else:
-                random_name = new_temporary_column(df)
-                new_columns[random_name] = RexConverter.convert(
-                    rel, expr, dc, context=context
-                )
-                logger.debug(f"Adding a new column {key} out of {expr}")
-                new_mappings[key] = random_name
+            # Create a random name and assign it to the dataframe
+            random_name = new_temporary_column(df)
+            new_columns[random_name] = RexConverter.convert(
+                rel, expr, dc, context=context
+            )
+            logger.debug(f"Adding a new column {expr.display_name()} out of {expr}")
+            new_mappings[expr.display_name()] = random_name
 
         # Actually add the new columns
         if new_columns:

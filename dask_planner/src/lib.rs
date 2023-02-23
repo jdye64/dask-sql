@@ -1,4 +1,3 @@
-use mimalloc::MiMalloc;
 use pyo3::prelude::*;
 
 mod dialect;
@@ -7,8 +6,7 @@ mod expression;
 mod parser;
 mod sql;
 
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// Low-level DataFusion internal package.
 ///
@@ -29,7 +27,7 @@ fn rust(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<sql::table::DaskTable>()?;
     m.add_class::<sql::function::DaskFunction>()?;
     m.add_class::<sql::table::DaskStatistics>()?;
-    m.add_class::<sql::logical::PyLogicalPlan>()?;
+    m.add_class::<PyLogicalPlan>()?;
 
     // Exceptions
     m.add(

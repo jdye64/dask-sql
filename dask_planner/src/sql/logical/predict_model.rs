@@ -5,8 +5,9 @@ use datafusion_expr::{logical_plan::UserDefinedLogicalNode, Expr, LogicalPlan};
 use fmt::Debug;
 use pyo3::prelude::*;
 
-use super::PyLogicalPlan;
 use crate::sql::{exceptions::py_type_err, logical};
+
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 #[derive(Clone)]
 pub struct PredictModelPlanNode {

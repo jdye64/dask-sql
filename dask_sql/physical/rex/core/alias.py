@@ -23,17 +23,12 @@ class RexAliasPlugin(BaseRexPlugin):
     def convert(
         self,
         rel: "LogicalPlan",
-        rex: "Expression",
+        expr: "Expression",
         dc: DataContainer,
         context: "dask_sql.Context",
     ) -> Union[dd.Series, Any]:
-        # extract the operands; there should only be a single underlying Expression
-        operands = rex.getOperands()
-        assert len(operands) == 1
-
-        sub_rex = operands[0]
-
-        value = RexConverter.convert(rel, sub_rex, dc, context=context)
+        alias = expr.to_variant()
+        value = RexConverter.convert(rel, alias.expr(), dc, context=context)
 
         if isinstance(value, DataContainer):
             return value.df

@@ -13,12 +13,45 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_REX_TYPE_TO_PLUGIN = {
-    "RexType.Reference": "InputRef",
-    "RexType.Call": "RexCall",
-    "RexType.Literal": "RexLiteral",
-    "RexType.Alias": "RexAlias",
-    "RexType.ScalarSubquery": "ScalarSubquery",
+# Mapping of https://docs.rs/datafusion/latest/datafusion/prelude/enum.Expr.html variants to Python plugin
+_EXPR_VARIANT_TO_PLUGIN = {
+    "Alias": "RexAlias",
+    "Column": "InputRef",
+    "ScalarVariable": "RexLiteral",
+    "Literal": "RexLiteral",
+    "BinaryExpr": "RexCall",
+    "Like": "RexCall",
+    "ILike": "RexCall",
+    "SimilarTo": "RexCall",
+    "Not": "RexCall",
+    "IsNotNull": "RexCall",
+    "IsNull": "RexCall",
+    "IsTrue": "RexCall",
+    "IsFalse": "RexCall",
+    "IsUnknown": "RexCall",
+    "IsNotTrue": "RexCall",
+    "IsNotFalse": "RexCall",
+    "IsNotUnknown": "RexCall",
+    "Negative": "RexCall",
+    "GetIndexedField": "RexCall",
+    "Between": "RexCall",
+    "Case": "RexCall",
+    "Cast": "RexCall",
+    "TryCast": "RexCall",
+    "Sort": "RexCall",
+    "ScalarFunction": "RexCall",
+    "ScalarUDF": "RexCall",
+    "AggregateFunction": "RexCall",
+    "WindowFunction": "RexCall",
+    "AggregateUDF": "RexCall",
+    "InList": "RexCall",
+    "Exists": "RexCall",
+    "InSubquery": "RexCall",
+    "ScalarSubquery": "ScalarSubquery",
+    "Wildcard": "RexCall",
+    "QualifiedWildcard": "RexCall",
+    "GroupingSet": "RexCall",
+    "Placeholder": "RexCall",
 }
 
 
@@ -58,7 +91,7 @@ class RexConverter(Pluggable):
         using the stored plugins and the dictionary of
         registered dask tables.
         """
-        expr_type = _REX_TYPE_TO_PLUGIN[str(rex.getRexType())]
+        expr_type = _EXPR_VARIANT_TO_PLUGIN[type(rex.to_variant()).__name__]
 
         try:
             plugin_instance = cls.get_plugin(expr_type)

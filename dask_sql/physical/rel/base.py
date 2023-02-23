@@ -74,7 +74,7 @@ class BaseRelPlugin:
         input tables as expected and returns them already
         converted into a dask dataframe.
         """
-        input_rels = rel.get_inputs()
+        input_rels = rel.input()
 
         assert len(input_rels) == n
 

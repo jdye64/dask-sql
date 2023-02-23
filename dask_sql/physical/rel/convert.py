@@ -47,10 +47,10 @@ class RelConverter(Pluggable):
         what "type" of Relational operator it represents to build the execution chain.
         """
 
-        node_type = rel.get_current_node_type()
+        node_type = rel.to_variant()
 
         try:
-            plugin_instance = cls.get_plugin(node_type)
+            plugin_instance = cls.get_plugin(type(node_type).__name__)
         except KeyError:  # pragma: no cover
             raise NotImplementedError(
                 f"No relational conversion for node type {node_type} available (yet)."
@@ -58,6 +58,6 @@ class RelConverter(Pluggable):
         logger.debug(
             f"Processing REL {rel} using {plugin_instance.__class__.__name__}..."
         )
-        df = plugin_instance.convert(rel, context=context)
+        df = plugin_instance.convert(node_type, context=context)
         logger.debug(f"Processed REL {rel} into {LoggableDataFrame(df)}")
         return df

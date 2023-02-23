@@ -61,10 +61,11 @@ use crate::{
             show_models::ShowModelsPlanNode,
             show_schema::ShowSchemasPlanNode,
             show_tables::ShowTablesPlanNode,
-            PyLogicalPlan,
         },
     },
 };
+
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// DaskSQLContext is main interface used for interacting with DataFusion to
 /// parse SQL queries, build logical plans, and optimize logical plans.
@@ -491,12 +492,9 @@ impl DaskSQLContext {
     pub fn logical_relational_algebra(
         &self,
         statement: statement::PyStatement,
-    ) -> PyResult<logical::PyLogicalPlan> {
+    ) -> PyResult<PyLogicalPlan> {
         self._logical_relational_algebra(statement.statement)
-            .map(|e| PyLogicalPlan {
-                original_plan: e,
-                current_node: None,
-            })
+            .map(|e| PyLogicalPlan::from(e))
             .map_err(py_parsing_exp)
     }
 
@@ -505,20 +503,17 @@ impl DaskSQLContext {
     /// `LogicalPlan`
     pub fn optimize_relational_algebra(
         &self,
-        existing_plan: logical::PyLogicalPlan,
-    ) -> PyResult<logical::PyLogicalPlan> {
+        existing_plan: PyLogicalPlan,
+    ) -> PyResult<PyLogicalPlan> {
         // Certain queries cannot be optimized. Ex: `EXPLAIN SELECT * FROM test` simply return those plans as is
         let mut visitor = OptimizablePlanVisitor {};
 
-        match existing_plan.original_plan.accept(&mut visitor) {
+        match existing_plan.plan().accept(&mut visitor) {
             Ok(valid) => {
                 if valid {
                     optimizer::DaskSqlOptimizer::new()
-                        .optimize(existing_plan.original_plan)
-                        .map(|k| PyLogicalPlan {
-                            original_plan: k,
-                            current_node: None,
-                        })
+                        .optimize((*existing_plan.plan()).clone())
+                        .map(|k| PyLogicalPlan::from(k))
                         .map_err(py_optimization_exp)
                 } else {
                     // This LogicalPlan does not support Optimization. Return original

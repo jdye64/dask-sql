@@ -98,7 +98,9 @@ class RexLiteralPlugin(BaseRexPlugin):
         dc: DataContainer,
         context: "dask_sql.Context",
     ) -> Any:
-        literal_type = str(rex.getType())
+        literal = rex.to_variant()
+        literal_type = literal.data_type()
+        print(f"Literal Type: {literal_type}")
 
         # Call the Rust function to get the actual value and convert the Rust
         # type name back to a SQL type
@@ -142,7 +144,7 @@ class RexLiteralPlugin(BaseRexPlugin):
             literal_value = rex.getInt32Value()
         elif literal_type == "Int64":
             literal_type = SqlTypeName.BIGINT
-            literal_value = rex.getInt64Value()
+            literal_value = literal.value_i64()
         elif literal_type == "Utf8":
             literal_type = SqlTypeName.VARCHAR
             literal_value = rex.getStringValue()

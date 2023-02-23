@@ -7,8 +7,10 @@ use pyo3::prelude::*;
 
 use crate::{
     parser::PySqlArg,
-    sql::{exceptions::py_type_err, logical},
+    sql::{exceptions::py_type_err},
 };
+
+use datafusion_python::sql::logical::PyLogicalPlan;
 
 #[derive(Clone)]
 pub struct CreateModelPlanNode {
@@ -78,7 +80,7 @@ impl PyCreateModel {
     /// statement to be used to gather the dataset which should be used for the
     /// model. This function returns that portion of the statement.
     #[pyo3(name = "getSelectQuery")]
-    fn get_select_query(&self) -> PyResult<logical::PyLogicalPlan> {
+    fn get_select_query(&self) -> PyResult<PyLogicalPlan> {
         Ok(self.create_model.input.clone().into())
     }
 
@@ -108,12 +110,12 @@ impl PyCreateModel {
     }
 }
 
-impl TryFrom<logical::LogicalPlan> for PyCreateModel {
+impl TryFrom<LogicalPlan> for PyCreateModel {
     type Error = PyErr;
 
-    fn try_from(logical_plan: logical::LogicalPlan) -> Result<Self, Self::Error> {
+    fn try_from(logical_plan: LogicalPlan) -> Result<Self, Self::Error> {
         match logical_plan {
-            logical::LogicalPlan::Extension(extension) => {
+            LogicalPlan::Extension(extension) => {
                 if let Some(ext) = extension
                     .node
                     .as_any()
