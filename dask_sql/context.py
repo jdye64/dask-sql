@@ -98,7 +98,7 @@ class Context:
         self.schema_name = self.DEFAULT_SCHEMA_NAME
         # All schema information
         self.schema = {self.schema_name: SchemaContainer(self.schema_name)}
-        # A started SQL server (useful for jupyter notebooks)
+        # A started SQL server (useful for jupyter notebooks)rel
         self.sql_server = None
 
         # Create the `DaskSQLContext` Rust context
@@ -855,35 +855,38 @@ class Context:
         return rel, rel_string
 
     def _compute_table_from_rel(self, rel: "LogicalPlan", return_futures: bool = True):
+        print(f"Value in _compute_table_from_rel: {rel}")
         dc = RelConverter.convert(rel, context=self)
 
-        # # Optimization might remove some alias projects. Make sure to keep them here.
-        # select_names = [field for field in rel.getRowType().getFieldList()]
-
-        # if rel.get_current_node_type() == "Explain":
+        # TODO: What do we do here??
+        # if isinstance(rel, datafusion.expr.Explain):
         #     return dc
         # if dc is None:
         #     return
 
-        # if select_names:
-        #     # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
-        #     # names the output col is prepended with the fully qualified column name
-        #     field_counts = Counter([field.getName() for field in select_names])
-        #     select_names = [
-        #         field.getQualifiedName()
-        #         if field_counts[field.getName()] > 1
-        #         else field.getName()
-        #         for field in select_names
-        #     ]
+        projection = rel.to_variant()
+        projected_schema = projection.schema()
 
-        #     cc = dc.column_container
-        #     cc = cc.rename(
-        #         {
-        #             df_col: select_name
-        #             for df_col, select_name in zip(cc.columns, select_names)
-        #         }
-        #     )
-        #     dc = DataContainer(dc.df, cc)
+        # Optimization might remove some alias projects. Make sure to keep them here.
+        select_names = [field.name() for field in projected_schema.fields()]
+
+        if select_names:
+            # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
+            # names the output col is prepended with the fully qualified column name
+            field_counts = Counter([str(field) for field in select_names])
+            select_names = [
+                field.qualified_name() if field_counts[field] > 1 else field
+                for field in select_names
+            ]
+
+            cc = dc.column_container
+            cc = cc.rename(
+                {
+                    df_col: select_name
+                    for df_col, select_name in zip(cc.columns, select_names)
+                }
+            )
+            dc = DataContainer(dc.df, cc)
 
         df = dc.assign()
         if not return_futures:

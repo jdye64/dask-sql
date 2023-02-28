@@ -47,6 +47,7 @@ class RelConverter(Pluggable):
         what "type" of Relational operator it represents to build the execution chain.
         """
 
+        print(f"LogicalPlan Type: {rel}")
         node_type = rel.to_variant()
 
         try:

@@ -100,7 +100,6 @@ class RexLiteralPlugin(BaseRexPlugin):
     ) -> Any:
         literal = rex.to_variant()
         literal_type = literal.data_type()
-        print(f"Literal Type: {literal_type}")
 
         # Call the Rust function to get the actual value and convert the Rust
         # type name back to a SQL type

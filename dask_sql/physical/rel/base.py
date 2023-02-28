@@ -2,13 +2,14 @@ import logging
 from typing import TYPE_CHECKING, List
 
 import dask.dataframe as dd
+from datafusion.common import DataType, DataTypeMap, DFSchema
 
 from dask_sql.datacontainer import ColumnContainer, DataContainer
 from dask_sql.mappings import cast_column_type, sql_to_python_type
 
 if TYPE_CHECKING:
     import dask_sql
-    from dask_planner.rust import LogicalPlan, RelDataType
+    from dask_planner.rust import LogicalPlan
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class BaseRelPlugin:
 
     @staticmethod
     def fix_column_to_row_type(
-        cc: ColumnContainer, row_type: "RelDataType"
+        cc: ColumnContainer, schema: "DFSchema"
     ) -> ColumnContainer:
         """
         Make sure that the given column container
@@ -38,7 +39,7 @@ class BaseRelPlugin:
         We assume that the column order is already correct
         and will just "blindly" rename the columns.
         """
-        field_names = [str(x) for x in row_type.getFieldNames()]
+        field_names = [str(x) for x in schema.field_names()]
 
         logger.debug(f"Renaming {cc.columns} to {field_names}")
         cc = cc.rename_handle_duplicates(
@@ -49,13 +50,13 @@ class BaseRelPlugin:
         return cc.limit_to(field_names)
 
     @staticmethod
-    def check_columns_from_row_type(df: dd.DataFrame, row_type: "RelDataType"):
+    def check_columns_from_row_type(df: dd.DataFrame, schema: "DFSchema"):
         """
         Similar to `self.fix_column_to_row_type`, but this time
         check for the correct column names instead of
         applying them.
         """
-        field_names = [str(x) for x in row_type.getFieldNames()]
+        field_names = [str(x) for x in schema.field_names()]
 
         assert list(df.columns) == field_names
 
@@ -84,7 +85,7 @@ class BaseRelPlugin:
         return [RelConverter.convert(input_rel, context) for input_rel in input_rels]
 
     @staticmethod
-    def fix_dtype_to_row_type(dc: DataContainer, row_type: "RelDataType"):
+    def fix_dtype_to_row_type(dc: DataContainer, schema: "DFSchema"):
         """
         Fix the dtype of the given data container (or: the df within it)
         to the data type given as argument.
@@ -99,13 +100,16 @@ class BaseRelPlugin:
         cc = dc.column_container
 
         field_types = {
-            str(field.getQualifiedName()): field.getType()
-            for field in row_type.getFieldList()
+            str(field.qualified_name()): field.data_type() for field in schema.fields()
         }
 
-        for field_name, field_type in field_types.items():
-            expected_type = sql_to_python_type(field_type.getSqlType())
-            df_field_name = cc.get_backend_by_frontend_name(field_name)
-            df = cast_column_type(df, df_field_name, expected_type)
+        # for field_name, field_type in field_types.items():
+        #     print(f"field_name type: {type(field_name)}")
+        #     print(f"field_tye type: {type(field_type)}")
+        #     data_type_map = DataTypeMap.arrow(field_type)
+        #     print(f"Data Type Map: {data_type_map}")
+        #     expected_type = sql_to_python_type(field_type.getSqlType())
+        #     df_field_name = cc.get_backend_by_frontend_name(field_name)
+        #     df = cast_column_type(df, df_field_name, expected_type)
 
         return DataContainer(df, dc.column_container)

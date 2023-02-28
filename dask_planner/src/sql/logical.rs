@@ -15,9 +15,7 @@ pub mod explain;
 pub mod export_model;
 pub mod filter;
 pub mod join;
-pub mod limit;
 pub mod predict_model;
-pub mod projection;
 pub mod repartition_by;
 pub mod show_columns;
 pub mod show_models;
@@ -25,7 +23,6 @@ pub mod show_schema;
 pub mod show_tables;
 pub mod sort;
 pub mod subquery_alias;
-pub mod table_scan;
 pub mod use_schema;
 pub mod window;
 

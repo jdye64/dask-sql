@@ -8,8 +8,9 @@ from dask_sql.physical.rex import RexConverter
 from dask_sql.utils import new_temporary_column
 
 if TYPE_CHECKING:
+    from datafusion.expr import Projection
+
     import dask_sql
-    from dask_planner.rust import LogicalPlan
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ class DaskProjectPlugin(BaseRelPlugin):
 
     class_name = "Projection"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
+    def convert(self, proj: "Projection", context: "dask_sql.Context") -> DataContainer:
         # Get the input of the previous step
-        (dc,) = self.assert_inputs(rel, 1, context)
+        (dc,) = self.assert_inputs(proj, 1, context)
 
         df = dc.df
         cc = dc.column_container
@@ -35,13 +36,13 @@ class DaskProjectPlugin(BaseRelPlugin):
         new_mappings = {}
 
         # Collect all (new) columns this Projection will limit to
-        for expr in rel.projections():
+        for expr in proj.projections():
             column_names.append(expr.display_name())
 
             # Create a random name and assign it to the dataframe
             random_name = new_temporary_column(df)
             new_columns[random_name] = RexConverter.convert(
-                rel, expr, dc, context=context
+                proj, expr, dc, context=context
             )
             logger.debug(f"Adding a new column {expr.display_name()} out of {expr}")
             new_mappings[expr.display_name()] = random_name
@@ -57,8 +58,8 @@ class DaskProjectPlugin(BaseRelPlugin):
         # Make sure the order is correct
         cc = cc.limit_to(column_names)
 
-        cc = self.fix_column_to_row_type(cc, rel.getRowType())
+        cc = self.fix_column_to_row_type(cc, proj.schema())
         dc = DataContainer(df, cc)
-        dc = self.fix_dtype_to_row_type(dc, rel.getRowType())
+        dc = self.fix_dtype_to_row_type(dc, proj.schema())
 
         return dc

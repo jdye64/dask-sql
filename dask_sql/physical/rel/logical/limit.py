@@ -11,8 +11,9 @@ from dask_sql.physical.rel.base import BaseRelPlugin
 from dask_sql.physical.rex import RexConverter
 
 if TYPE_CHECKING:
+    from datafusion.expr import Limit
+
     import dask_sql
-    from dask_planner.rust import LogicalPlan
 
 
 class DaskLimitPlugin(BaseRelPlugin):
@@ -23,16 +24,20 @@ class DaskLimitPlugin(BaseRelPlugin):
 
     class_name = "Limit"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        (dc,) = self.assert_inputs(rel, 1, context)
+    def convert(
+        self, limit_expr: "Limit", context: "dask_sql.Context"
+    ) -> DataContainer:
+        (dc,) = self.assert_inputs(limit_expr, 1, context)
         df = dc.df
         cc = dc.column_container
 
         # Retrieve the RexType::Literal values from the `LogicalPlan` Limit
         # Fetch -> LIMIT
         # Skip -> OFFSET
-        limit = RexConverter.convert(rel, rel.limit().getFetch(), df, context=context)
-        offset = RexConverter.convert(rel, rel.limit().getSkip(), df, context=context)
+        # limit = RexConverter.convert(limit, limit.fetch(), df, context=context)
+        # offset = RexConverter.convert(limit, limit.skip(), df, context=context)
+        limit = limit_expr.fetch()
+        offset = limit_expr.skip()
 
         # apply offset to limit if specified
         if limit and offset:
@@ -40,7 +45,7 @@ class DaskLimitPlugin(BaseRelPlugin):
 
         # apply limit and/or offset to DataFrame
         df = self._apply_limit(df, limit, offset)
-        cc = self.fix_column_to_row_type(cc, rel.getRowType())
+        cc = self.fix_column_to_row_type(cc, limit_expr.schema())
 
         # No column type has changed, so no need to cast again
         return DataContainer(df, cc)
