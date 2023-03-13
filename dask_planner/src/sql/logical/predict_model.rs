@@ -2,12 +2,11 @@ use std::{any::Any, fmt, sync::Arc};
 
 use datafusion_common::DFSchemaRef;
 use datafusion_expr::{logical_plan::UserDefinedLogicalNode, Expr, LogicalPlan};
+use datafusion_python::sql::logical::PyLogicalPlan;
 use fmt::Debug;
 use pyo3::prelude::*;
 
 use crate::sql::{exceptions::py_type_err, logical};
-
-use datafusion_python::sql::logical::PyLogicalPlan;
 
 #[derive(Clone)]
 pub struct PredictModelPlanNode {
@@ -56,6 +55,18 @@ impl UserDefinedLogicalNode for PredictModelPlanNode {
             model_name: self.model_name.clone(),
             input: inputs[0].clone(),
         })
+    }
+
+    fn name(&self) -> &str {
+        "PredictModelPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
     }
 }
 

@@ -63,6 +63,18 @@ impl UserDefinedLogicalNode for AlterSchemaPlanNode {
             new_schema_name: self.new_schema_name.clone(),
         })
     }
+
+    fn name(&self) -> &str {
+        "AlterSchemaPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "AlterSchema", module = "dask_planner", subclass)]

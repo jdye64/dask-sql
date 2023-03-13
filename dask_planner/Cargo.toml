@@ -10,12 +10,12 @@ rust-version = "1.65"
 
 [dependencies]
 async-trait = "0.1.64"
-datafusion = "18.0.0"
-datafusion-common = "18.0.0"
-datafusion-expr = "18.0.0"
-datafusion-optimizer = "18.0.0"
-datafusion-sql = "18.0.0"
-datafusion-python = { git = "https://github.com/jdye64/arrow-datafusion-python.git", branch = "table_scan_tweaks" }
+datafusion = { git = "https://github.com/jdye64/arrow-datafusion.git", rev = "50e9d78" }
+datafusion-common = { git = "https://github.com/jdye64/arrow-datafusion.git", rev = "50e9d78" }
+datafusion-expr = { git = "https://github.com/jdye64/arrow-datafusion.git", rev = "50e9d78" }
+datafusion-optimizer = { git = "https://github.com/jdye64/arrow-datafusion.git", rev = "50e9d78" }
+datafusion-sql = { git = "https://github.com/jdye64/arrow-datafusion.git", rev = "50e9d78" }
+datafusion-python = { git = "https://github.com/jdye64/arrow-datafusion-python.git", branch = "dask-sql-refactor" }
 log = "^0.4"
 pyo3 = { version = "0.18.1", features = ["extension-module", "abi3", "abi3-py38"] }
 

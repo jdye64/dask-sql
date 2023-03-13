@@ -4,7 +4,8 @@ from dask_sql.physical.rel.base import BaseRelPlugin
 
 if TYPE_CHECKING:
     import dask_sql
-    from dask_planner.rust import LogicalPlan
+
+from datafusion.expr import Explain
 
 
 class ExplainPlugin(BaseRelPlugin):
@@ -14,6 +15,6 @@ class ExplainPlugin(BaseRelPlugin):
 
     class_name = "Explain"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context"):
-        explain_strings = rel.explain().getExplainString()
+    def convert(self, explain: "Explain", context: "dask_sql.Context"):
+        explain_strings = explain.plan_strings()
         return "\n".join(explain_strings)

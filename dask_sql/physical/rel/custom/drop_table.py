@@ -6,7 +6,8 @@ from dask_sql.physical.rel.base import BaseRelPlugin
 
 if TYPE_CHECKING:
     import dask_sql
-    from dask_sql.rust import LogicalPlan
+
+from datafusion.expr import DropTable
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +22,11 @@ class DropTablePlugin(BaseRelPlugin):
 
     class_name = "DropTable"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        # Rust create_memory_table instance handle
-        drop_table = rel.drop_table()
+    def convert(
+        self, drop_table: "DropTable", context: "dask_sql.Context"
+    ) -> DataContainer:
 
-        qualified_table_name = drop_table.getQualifiedName()
+        qualified_table_name = drop_table.name()
         *schema_name, table_name = qualified_table_name.split(".")
 
         if len(schema_name) > 1:
@@ -39,7 +40,7 @@ class DropTablePlugin(BaseRelPlugin):
             schema_name not in context.schema
             or table_name not in context.schema[schema_name].tables
         ):
-            if not drop_table.getIfExists():
+            if not drop_table.if_exists():
                 raise RuntimeError(
                     f"A table with the name {qualified_table_name} is not present."
                 )

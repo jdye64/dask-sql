@@ -53,6 +53,18 @@ impl UserDefinedLogicalNode for ShowModelsPlanNode {
             schema_name: self.schema_name.clone(),
         })
     }
+
+    fn name(&self) -> &str {
+        "ShowModelsPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "ShowModels", module = "dask_planner", subclass)]

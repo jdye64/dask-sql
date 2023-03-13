@@ -4,19 +4,14 @@ use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion_expr::{Expr, LogicalPlan, TableProviderFilterPushDown, TableSource};
 use datafusion_optimizer::utils::split_conjunction;
+use datafusion_python::sql::logical::PyLogicalPlan;
 use pyo3::prelude::*;
 
-use crate::{
-    sql::{
-        types::{
-            rel_data_type::RelDataType,
-            rel_data_type_field::RelDataTypeField,
-            DaskTypeMap,
-        },
-    },
+use crate::sql::types::{
+    rel_data_type::RelDataType,
+    rel_data_type_field::RelDataTypeField,
+    DaskTypeMap,
 };
-
-use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// DaskTable wrapper that is compatible with DataFusion logical query plans
 pub struct DaskTableSource {

@@ -15,6 +15,7 @@ use datafusion_expr::{
     LogicalPlan,
     Operator,
 };
+use datafusion_python::sql::logical::PyLogicalPlan;
 use pyo3::prelude::*;
 
 use crate::{
@@ -24,8 +25,6 @@ use crate::{
         types::RexType,
     },
 };
-
-use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// An PyExpr that can be used on a DataFrame
 #[pyclass(name = "Expression", module = "datafusion", subclass)]
@@ -251,8 +250,7 @@ impl PyExpr {
 
     /// Python friendly shim code to get the name of a column referenced by an expression
     pub fn column_name(&self, plan: PyLogicalPlan) -> PyResult<String> {
-        self._column_name(&plan.plan())
-            .map_err(py_runtime_err)
+        self._column_name(&plan.plan()).map_err(py_runtime_err)
     }
 
     /// Row expressions, Rex(s), operate on the concept of operands. This maps to expressions that are used in

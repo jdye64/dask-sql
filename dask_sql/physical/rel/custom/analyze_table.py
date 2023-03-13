@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     import dask_sql
     from dask_planner.rust import LogicalPlan
 
+from dask_planner.rust import AnalyzeTable
+
 
 class AnalyzeTablePlugin(BaseRelPlugin):
     """
@@ -31,7 +33,7 @@ class AnalyzeTablePlugin(BaseRelPlugin):
     class_name = "AnalyzeTable"
 
     def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        analyze_table = rel.analyze_table()
+        analyze_table = AnalyzeTable.from_plan(rel)
 
         schema_name = analyze_table.getSchemaName() or context.schema_name
         table_name = analyze_table.getTableName()

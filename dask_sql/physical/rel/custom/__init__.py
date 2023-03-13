@@ -5,13 +5,14 @@ from .create_experiment import CreateExperimentPlugin
 from .create_memory_table import CreateMemoryTablePlugin
 from .create_model import CreateModelPlugin
 from .create_table import CreateTablePlugin
+from .create_view import CreateViewPlugin
 from .describe_model import DescribeModelPlugin
-from .distributeby import DistributeByPlugin
 from .drop_model import DropModelPlugin
 from .drop_schema import DropSchemaPlugin
 from .drop_table import DropTablePlugin
 from .export_model import ExportModelPlugin
 from .predict_model import PredictModelPlugin
+from .repartition import RepartitionPlugin
 from .schemas import ShowSchemasPlugin
 from .show_columns import ShowColumnsPlugin
 from .show_models import ShowModelsPlugin
@@ -25,6 +26,7 @@ __all__ = [
     CreateCatalogSchemaPlugin,
     CreateMemoryTablePlugin,
     CreateTablePlugin,
+    CreateViewPlugin,
     DropModelPlugin,
     DropSchemaPlugin,
     DropTablePlugin,
@@ -38,5 +40,5 @@ __all__ = [
     UseSchemaPlugin,
     AlterSchemaPlugin,
     AlterTablePlugin,
-    DistributeByPlugin,
+    RepartitionPlugin,
 ]

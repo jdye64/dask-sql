@@ -28,7 +28,14 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(
-        include=["dask_sql", "dask_sql.*", "dask_planner", "dask_planner.*"]
+        include=[
+            "dask_sql",
+            "dask_sql.*",
+            "dask_planner",
+            "dask_planner.*",
+            "datafusion_python",
+            "datafusion_python.*",
+        ]
     ),
     package_data={"dask_sql": ["sql*.yaml"]},
     rust_extensions=[

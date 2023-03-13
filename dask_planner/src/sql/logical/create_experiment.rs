@@ -2,15 +2,11 @@ use std::{any::Any, fmt, sync::Arc};
 
 use datafusion_common::DFSchemaRef;
 use datafusion_expr::{logical_plan::UserDefinedLogicalNode, Expr, LogicalPlan};
+use datafusion_python::sql::logical::PyLogicalPlan;
 use fmt::Debug;
 use pyo3::prelude::*;
 
-use crate::{
-    parser::PySqlArg,
-    sql::{exceptions::py_type_err},
-};
-
-use datafusion_python::sql::logical::PyLogicalPlan;
+use crate::{parser::PySqlArg, sql::exceptions::py_type_err};
 
 #[derive(Clone)]
 pub struct CreateExperimentPlanNode {
@@ -70,6 +66,18 @@ impl UserDefinedLogicalNode for CreateExperimentPlanNode {
             or_replace: self.or_replace,
             with_options: self.with_options.clone(),
         })
+    }
+
+    fn name(&self) -> &str {
+        "CreateExperimentPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
     }
 }
 

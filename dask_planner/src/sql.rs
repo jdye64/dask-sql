@@ -28,6 +28,7 @@ use datafusion_expr::{
     TypeSignature,
     Volatility,
 };
+use datafusion_python::sql::logical::PyLogicalPlan;
 use datafusion_sql::{
     parser::Statement as DFStatement,
     planner::{ContextProvider, SqlToRel},
@@ -64,8 +65,6 @@ use crate::{
         },
     },
 };
-
-use datafusion_python::sql::logical::PyLogicalPlan;
 
 /// DaskSQLContext is main interface used for interacting with DataFusion to
 /// parse SQL queries, build logical plans, and optimize logical plans.

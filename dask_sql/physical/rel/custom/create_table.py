@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     import dask_sql
     from dask_planner.rust import LogicalPlan
 
+from dask_planner.rust import CreateTable
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +41,8 @@ class CreateTablePlugin(BaseRelPlugin):
     class_name = "CreateTable"
 
     def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        create_table = rel.create_table()
+
+        create_table = CreateTable.from_plan(rel)
 
         schema_name = create_table.getSchemaName() or context.schema_name
         table_name = create_table.getTableName()

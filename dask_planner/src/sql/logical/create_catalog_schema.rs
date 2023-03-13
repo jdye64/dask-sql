@@ -61,6 +61,18 @@ impl UserDefinedLogicalNode for CreateCatalogSchemaPlanNode {
             or_replace: self.or_replace,
         })
     }
+
+    fn name(&self) -> &str {
+        "CreateCatalogSchemaPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "CreateCatalogSchema", module = "dask_planner", subclass)]

@@ -58,6 +58,18 @@ impl UserDefinedLogicalNode for DropModelPlanNode {
             schema: Arc::new(DFSchema::empty()),
         })
     }
+
+    fn name(&self) -> &str {
+        "DropModelPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "DropModel", module = "dask_planner", subclass)]

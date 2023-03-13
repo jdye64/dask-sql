@@ -4,25 +4,21 @@ pub mod alter_table;
 pub mod analyze_table;
 pub mod create_catalog_schema;
 pub mod create_experiment;
-pub mod create_memory_table;
 pub mod create_model;
 pub mod create_table;
 pub mod describe_model;
 pub mod drop_model;
 pub mod drop_schema;
-pub mod drop_table;
 pub mod explain;
 pub mod export_model;
 pub mod filter;
 pub mod join;
 pub mod predict_model;
-pub mod repartition_by;
 pub mod show_columns;
 pub mod show_models;
 pub mod show_schema;
 pub mod show_tables;
 pub mod sort;
-pub mod subquery_alias;
 pub mod use_schema;
 pub mod window;
 
@@ -185,10 +181,10 @@ use crate::sql::exceptions::py_type_err;
 //         to_py_plan(self.current_node.as_ref())
 //     }
 
-//     /// LogicalPlan::Extension::ShowColumns as PyShowColumns
-//     pub fn analyze_table(&self) -> PyResult<analyze_table::PyAnalyzeTable> {
-//         to_py_plan(self.current_node.as_ref())
-//     }
+// /// LogicalPlan::Extension::ShowColumns as PyShowColumns
+// pub fn analyze_table(&self) -> PyResult<analyze_table::PyAnalyzeTable> {
+//     to_py_plan(self.current_node.as_ref())
+// }
 
 //     /// LogicalPlan::CreateCatalogSchema as PyCreateCatalogSchema
 //     pub fn create_catalog_schema(&self) -> PyResult<create_catalog_schema::PyCreateCatalogSchema> {
@@ -249,7 +245,6 @@ use crate::sql::exceptions::py_type_err;
 //             Err(_e) => Err(py_type_err("Unable to determine current node table name")),
 //         }
 //     }
-
 
 //     #[pyo3(name = "getRowType")]
 //     pub fn row_type(&self) -> PyResult<RelDataType> {

@@ -55,6 +55,18 @@ impl UserDefinedLogicalNode for DropSchemaPlanNode {
             if_exists: self.if_exists,
         })
     }
+
+    fn name(&self) -> &str {
+        "DropSchemaPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "DropSchema", module = "dask_planner", subclass)]

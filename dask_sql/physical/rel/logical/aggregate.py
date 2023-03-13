@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     import dask_sql
     from dask_planner.rust import LogicalPlan
 
+from datafusion.expr import Aggregate
+
 logger = logging.getLogger(__name__)
 
 
@@ -200,10 +202,8 @@ class DaskAggregatePlugin(BaseRelPlugin):
         ),
     }
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        (dc,) = self.assert_inputs(rel, 1, context)
-
-        agg = rel.aggregate()
+    def convert(self, agg: "Aggregate", context: "dask_sql.Context") -> DataContainer:
+        (dc,) = self.assert_inputs(agg, 1, context)
 
         df = dc.df
         cc = dc.column_container
@@ -215,7 +215,7 @@ class DaskAggregatePlugin(BaseRelPlugin):
         group_columns = (
             agg.getDistinctColumns()
             if agg.isDistinctNode()
-            else [group_expr.column_name(rel) for group_expr in group_exprs]
+            else [group_expr.column_name(agg) for group_expr in group_exprs]
         )
 
         dc = DataContainer(df, cc)
@@ -229,7 +229,7 @@ class DaskAggregatePlugin(BaseRelPlugin):
 
         # Do all aggregates
         df_agg, output_column_order, cc = self._do_aggregations(
-            rel,
+            agg,
             dc,
             group_columns,
             context,
@@ -250,9 +250,9 @@ class DaskAggregatePlugin(BaseRelPlugin):
 
         cc = ColumnContainer(df_agg.columns).limit_to(backend_output_column_order)
 
-        cc = self.fix_column_to_row_type(cc, rel.getRowType())
+        cc = self.fix_column_to_row_type(cc, agg.getRowType())
         dc = DataContainer(df_agg, cc)
-        dc = self.fix_dtype_to_row_type(dc, rel.getRowType())
+        dc = self.fix_dtype_to_row_type(dc, agg.getRowType())
         return dc
 
     def _do_aggregations(

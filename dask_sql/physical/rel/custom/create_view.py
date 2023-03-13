@@ -8,18 +8,18 @@ if TYPE_CHECKING:
     import dask_sql
     from dask_planner import LogicalPlan
 
-from datafusion.expr import CreateMemoryTable
+from datafusion.expr import CreateView
 
 logger = logging.getLogger(__name__)
 
 
-class CreateMemoryTablePlugin(BaseRelPlugin):
+class CreateViewPlugin(BaseRelPlugin):
     """
-    Create a table or view from the given SELECT query
+    Create a view from the given SELECT query
     and register it at the context.
     The SQL call looks like
 
-        CREATE TABLE <table-name> AS
+        CREATE VIEW <table-name> AS
             <some select query>
 
     It sends the select query through the normal parsing
@@ -34,13 +34,13 @@ class CreateMemoryTablePlugin(BaseRelPlugin):
     Nothing is returned.
     """
 
-    class_name = "CreateMemoryTable"
+    class_name = "CreateView"
 
     def convert(
-        self, create_memory_table: "CreateMemoryTable", context: "dask_sql.Context"
+        self, create_view: "CreateView", context: "dask_sql.Context"
     ) -> DataContainer:
 
-        qualified_table_name = create_memory_table.name()
+        qualified_table_name = create_view.name()
         *schema_name, table_name = qualified_table_name.split(".")
 
         if len(schema_name) > 1:
@@ -53,28 +53,22 @@ class CreateMemoryTablePlugin(BaseRelPlugin):
         if schema_name not in context.schema:
             raise RuntimeError(f"A schema with the name {schema_name} is not present.")
         if table_name in context.schema[schema_name].tables:
-            if create_memory_table.if_not_exists():
-                return
-            elif not create_memory_table.or_replace():
+            if not create_view.or_replace():
                 raise RuntimeError(
-                    f"A table with the name {table_name} is already present."
+                    f"A view with the name {table_name} is already present."
                 )
 
-        input_rel = create_memory_table.input()
+        input_rel = create_view.input()
 
         # Ensure that only a single Input LogicalPlan is assigned to the input_rel
         if isinstance(input_rel, list):
             input_rel = input_rel[0]
 
-        # TODO: we currently always persist for CREATE TABLE AS and never persist for CREATE VIEW AS;
-        # should this be configured by the user? https://github.com/dask-contrib/dask-sql/issues/269
-        # persist = create_memory_table.isTable()
-
-        # This is always True now, since this logic is ONLY invoked for a CREATE TABLE AS statement
-        persist = True
+        # This is always False now, since this logic is ONLY invoked for a CREATE VIEW AS statement
+        persist = False
 
         logger.debug(
-            f"Creating new table with name {qualified_table_name} and logical plan {input_rel}"
+            f"Creating new view with name {qualified_table_name} and logical plan {input_rel}"
         )
 
         context.create_table(

@@ -160,7 +160,7 @@ class SQLDivisionOperator(Operation):
     def div(self, lhs, rhs, rex=None):
         result = lhs / rhs
 
-        output_type = str(rex.getType())
+        output_type = str(rex.get_type())
         output_type = sql_to_python_type(SqlTypeName.fromString(output_type.upper()))
 
         is_float = pd.api.types.is_float_dtype(output_type)
@@ -1088,14 +1088,18 @@ class RexCallPlugin(BaseRexPlugin):
         # Prepare the operands by turning the RexNodes into python expressions
         operands = [
             RexConverter.convert(rel, o, dc, context=context)
-            for o in expr.getOperands()
+            for o in expr.get_operands()
         ]
 
         # Now use the operator name in the mapping
         schema_name = context.schema_name
-        operator_name = expr.getOperatorName().lower()
+        operator_name = expr.variant_name().lower()
 
         try:
+            # If the expression is a BinaryExpr we need to get the "operator"/"op" here
+            if operator_name == "binaryexpr":
+                operator_name = expr.to_variant().op()
+
             operation = self.OPERATION_MAPPING[operator_name]
         except KeyError:
             try:

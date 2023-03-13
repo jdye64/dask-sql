@@ -6,6 +6,7 @@ use datafusion_expr::{
     Expr,
     LogicalPlan,
 };
+use datafusion_python::sql::logical::PyLogicalPlan;
 use fmt::Debug;
 use pyo3::prelude::*;
 
@@ -65,6 +66,18 @@ impl UserDefinedLogicalNode for AnalyzeTablePlanNode {
             columns: self.columns.clone(),
         })
     }
+
+    fn name(&self) -> &str {
+        "AnalyzeTable"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        true
+    }
 }
 
 #[pyclass(name = "AnalyzeTable", module = "dask_planner", subclass)]
@@ -88,7 +101,26 @@ impl PyAnalyzeTable {
     fn get_columns(&self) -> PyResult<Vec<String>> {
         Ok(self.analyze_table.columns.clone())
     }
+
+    #[staticmethod]
+    #[pyo3(name = "from_plan")]
+    fn from_plan(plan: PyLogicalPlan) -> PyResult<PyAnalyzeTable> {
+        let tmp = &*(plan.plan()).clone();
+        PyAnalyzeTable::try_from(tmp.clone())
+    }
 }
+
+// impl From<Projection> for PyProjection {
+//     fn from(projection: Projection) -> PyProjection {
+//         PyProjection { projection }
+//     }
+// }
+
+// impl From<PyProjection> for Projection {
+//     fn from(proj: PyProjection) -> Self {
+//         proj.projection
+//     }
+// }
 
 impl TryFrom<logical::LogicalPlan> for PyAnalyzeTable {
     type Error = PyErr;

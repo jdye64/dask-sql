@@ -9,12 +9,14 @@ if TYPE_CHECKING:
     import dask_sql
     from dask_planner.rust import LogicalPlan
 
+from datafusion.expr import Repartition
+
 logger = logging.getLogger(__name__)
 
 
-class DistributeByPlugin(BaseRelPlugin):
+class RepartitionPlugin(BaseRelPlugin):
     """
-    Distribute the target based on the specified sql identifier from a SELECT query.
+    Repartition the target based on the specified sql identifier from a SELECT query.
     The SQL is:
 
         SELECT age, name FROM person DISTRIBUTE BY age
@@ -23,10 +25,16 @@ class DistributeByPlugin(BaseRelPlugin):
     # DataFusion provides the phrase `Repartition` in the LogicalPlan instead of `Distribute By`, it is the same thing
     class_name = "Repartition"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context") -> DataContainer:
-        distribute = rel.repartition_by()
-        select = distribute.getSelectQuery()
-        distribute_list = distribute.getDistributionColumns()
+    def convert(
+        self, repartition: "Repartition", context: "dask_sql.Context"
+    ) -> DataContainer:
+
+        select = repartition.input()
+
+        if isinstance(select, list):
+            select = select[0]
+
+        distribute_list = repartition.distribute_columns()
 
         df = context.sql(select)
         logger.debug(f"Extracted sub-dataframe as {LoggableDataFrame(df)}")

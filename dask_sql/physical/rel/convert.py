@@ -2,6 +2,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import dask.dataframe as dd
+from datafusion.expr import Extension
 
 from dask_sql.physical.rel.base import BaseRelPlugin
 from dask_sql.utils import LoggableDataFrame, Pluggable
@@ -48,17 +49,45 @@ class RelConverter(Pluggable):
         """
 
         print(f"LogicalPlan Type: {rel}")
-        node_type = rel.to_variant()
+
+        node_type = None
+        node_name = None
+        is_custom = False
+
+        # First attempt to get a standard SQL variant from Arrow DataFusion Python
+        try:
+            node_type = rel.to_variant()
+            node_name = type(node_type).__name__
+
+            # Certain LogicalNode are "custom". This means they are not part of DataFusion Python and allow
+            # a consuming framework to define their own nodes and parsing logic. Dask-SQL has several of those
+            # custom nodes. Ex: DROP MODEL, PREDICT MODEL, ANALYZE TABLE. Those are converted into their Python
+            # variants here. DataFusion Python views them as "Extension" nodes.
+            if str(type(node_type)) == str(Extension):
+                node_name = node_type.name()
+                print(f"Custom Extension Name: {node_name}")
+                is_custom = True
+
+        except ValueError:
+            # This means that the variant is not supported and maps to the Rust error type `DataFusionError::UnsupportedVariant(String)`
+            # In this case we can decide if we have custom logic for this LogicalNode variant or if we indeed want to error
+            breakpoint()
+            print(f"Ok hit this!!!!!{rel}")
 
         try:
-            plugin_instance = cls.get_plugin(type(node_type).__name__)
+            # plugin_instance = cls.get_plugin(type(node_type).__name__)
+            plugin_instance = cls.get_plugin(node_name)
         except KeyError:  # pragma: no cover
+            breakpoint()
             raise NotImplementedError(
                 f"No relational conversion for node type {node_type} available (yet)."
             )
         logger.debug(
             f"Processing REL {rel} using {plugin_instance.__class__.__name__}..."
         )
-        df = plugin_instance.convert(node_type, context=context)
+        if is_custom:
+            df = plugin_instance.convert(rel, context=context)
+        else:
+            df = plugin_instance.convert(node_type, context=context)
         logger.debug(f"Processed REL {rel} into {LoggableDataFrame(df)}")
         return df

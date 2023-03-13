@@ -5,7 +5,8 @@ from dask_sql.physical.rel.base import BaseRelPlugin
 
 if TYPE_CHECKING:
     import dask_sql
-    from dask_planner.rust import LogicalPlan
+
+from datafusion.expr import SubqueryAlias
 
 
 class SubqueryAlias(BaseRelPlugin):
@@ -15,12 +16,12 @@ class SubqueryAlias(BaseRelPlugin):
 
     class_name = "SubqueryAlias"
 
-    def convert(self, rel: "LogicalPlan", context: "dask_sql.Context"):
+    def convert(self, rel: "SubqueryAlias", context: "dask_sql.Context"):
         (dc,) = self.assert_inputs(rel, 1, context)
 
         cc = dc.column_container
 
-        alias = rel.subquery_alias().getAlias()
+        alias = rel.alias()
 
         return DataContainer(
             dc.df,

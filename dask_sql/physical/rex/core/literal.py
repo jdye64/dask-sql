@@ -112,10 +112,10 @@ class RexLiteralPlugin(BaseRexPlugin):
                 literal_value = None
         elif literal_type == "Float32":
             literal_type = SqlTypeName.FLOAT
-            literal_value = rex.getFloat32Value()
+            literal_value = literal.value_f32()
         elif literal_type == "Float64":
             literal_type = SqlTypeName.DOUBLE
-            literal_value = rex.getFloat64Value()
+            literal_value = literal.value_f64()
         elif literal_type == "Decimal128":
             literal_type = SqlTypeName.DECIMAL
             value, _, scale = rex.getDecimal128Value()
@@ -140,13 +140,13 @@ class RexLiteralPlugin(BaseRexPlugin):
             literal_value = rex.getInt16Value()
         elif literal_type == "Int32":
             literal_type = SqlTypeName.INTEGER
-            literal_value = rex.getInt32Value()
+            literal_value = rex.value_i32()
         elif literal_type == "Int64":
             literal_type = SqlTypeName.BIGINT
             literal_value = literal.value_i64()
         elif literal_type == "Utf8":
             literal_type = SqlTypeName.VARCHAR
-            literal_value = rex.getStringValue()
+            literal_value = literal.value_str()
         elif literal_type == "Date32":
             literal_type = SqlTypeName.DATE
             literal_value = np.datetime64(rex.getDate32Value(), "D")

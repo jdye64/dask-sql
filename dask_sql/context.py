@@ -10,6 +10,7 @@ import pandas as pd
 from dask import config as dask_config
 from dask.base import optimize
 from dask.distributed import Client
+from datafusion.expr import Explain
 
 from dask_planner.rust import (
     DaskSchema,
@@ -30,6 +31,7 @@ try:
 except ImportError:  # pragma: no cover
     pass
 
+import datafusion.expr as dfe
 from datafusion.expr import Projection
 
 from dask_sql import input_utils
@@ -126,6 +128,7 @@ class Context:
         RelConverter.add_plugin_class(custom.CreateModelPlugin, replace=False)
         RelConverter.add_plugin_class(custom.CreateCatalogSchemaPlugin, replace=False)
         RelConverter.add_plugin_class(custom.CreateMemoryTablePlugin, replace=False)
+        RelConverter.add_plugin_class(custom.CreateViewPlugin, replace=False)
         RelConverter.add_plugin_class(custom.CreateTablePlugin, replace=False)
         RelConverter.add_plugin_class(custom.DropModelPlugin, replace=False)
         RelConverter.add_plugin_class(custom.DropSchemaPlugin, replace=False)
@@ -140,7 +143,7 @@ class Context:
         RelConverter.add_plugin_class(custom.UseSchemaPlugin, replace=False)
         RelConverter.add_plugin_class(custom.AlterSchemaPlugin, replace=False)
         RelConverter.add_plugin_class(custom.AlterTablePlugin, replace=False)
-        RelConverter.add_plugin_class(custom.DistributeByPlugin, replace=False)
+        RelConverter.add_plugin_class(custom.RepartitionPlugin, replace=False)
 
         RexConverter.add_plugin_class(core.RexAliasPlugin, replace=False)
         RexConverter.add_plugin_class(core.RexCallPlugin, replace=False)
@@ -855,38 +858,41 @@ class Context:
         return rel, rel_string
 
     def _compute_table_from_rel(self, rel: "LogicalPlan", return_futures: bool = True):
-        print(f"Value in _compute_table_from_rel: {rel}")
         dc = RelConverter.convert(rel, context=self)
 
-        # TODO: What do we do here??
-        # if isinstance(rel, datafusion.expr.Explain):
-        #     return dc
-        # if dc is None:
-        #     return
+        if str(type(rel.to_variant())) == str(Explain):
+            return dc
+        if dc is None:
+            return
 
         projection = rel.to_variant()
-        projected_schema = projection.schema()
 
-        # Optimization might remove some alias projects. Make sure to keep them here.
-        select_names = [field.name() for field in projected_schema.fields()]
+        try:
+            projected_schema = projection.schema()
 
-        if select_names:
-            # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
-            # names the output col is prepended with the fully qualified column name
-            field_counts = Counter([str(field) for field in select_names])
-            select_names = [
-                field.qualified_name() if field_counts[field] > 1 else field
-                for field in select_names
-            ]
+            # Optimization might remove some alias projects. Make sure to keep them here.
+            select_names = [field.name() for field in projected_schema.fields()]
 
-            cc = dc.column_container
-            cc = cc.rename(
-                {
-                    df_col: select_name
-                    for df_col, select_name in zip(cc.columns, select_names)
-                }
-            )
-            dc = DataContainer(dc.df, cc)
+            if select_names:
+                # Use FQ name if not unique and simple name if it is unique. If a join contains the same column
+                # names the output col is prepended with the fully qualified column name
+                field_counts = Counter([str(field) for field in select_names])
+                select_names = [
+                    field.qualified_name() if field_counts[field] > 1 else field
+                    for field in select_names
+                ]
+
+                cc = dc.column_container
+                cc = cc.rename(
+                    {
+                        df_col: select_name
+                        for df_col, select_name in zip(cc.columns, select_names)
+                    }
+                )
+                dc = DataContainer(dc.df, cc)
+        except AttributeError:
+            # This is fine, just means the node is something that does not project columns. Ex: AnalyzeTable
+            pass
 
         df = dc.assign()
         if not return_futures:

@@ -61,6 +61,18 @@ impl UserDefinedLogicalNode for ExportModelPlanNode {
             with_options: self.with_options.clone(),
         })
     }
+
+    fn name(&self) -> &str {
+        "ExportModelPlanNode"
+    }
+
+    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
+        todo!()
+    }
+
+    fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
+        todo!()
+    }
 }
 
 #[pyclass(name = "ExportModel", module = "dask_planner", subclass)]
