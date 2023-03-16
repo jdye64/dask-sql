@@ -1,8 +1,10 @@
 use std::{any::Any, fmt, sync::Arc};
 
-use datafusion_common::DFSchemaRef;
-use datafusion_expr::{logical_plan::UserDefinedLogicalNode, Expr, LogicalPlan};
-use datafusion_python::sql::logical::PyLogicalPlan;
+use datafusion_python::{
+    datafusion_common::DFSchemaRef,
+    datafusion_expr::{logical_plan::UserDefinedLogicalNode, Expr, LogicalPlan},
+    sql::logical::PyLogicalPlan,
+};
 use fmt::Debug;
 use pyo3::prelude::*;
 

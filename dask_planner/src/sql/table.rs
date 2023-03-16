@@ -1,10 +1,12 @@
 use std::any::Any;
 
 use async_trait::async_trait;
-use datafusion::arrow::datatypes::SchemaRef;
-use datafusion_expr::{Expr, LogicalPlan, TableProviderFilterPushDown, TableSource};
-use datafusion_optimizer::utils::split_conjunction;
-use datafusion_python::sql::logical::PyLogicalPlan;
+use datafusion_python::{
+    datafusion::arrow::datatypes::SchemaRef,
+    datafusion_expr::{Expr, LogicalPlan, TableProviderFilterPushDown, TableSource},
+    datafusion_optimizer::utils::split_conjunction,
+    sql::logical::PyLogicalPlan,
+};
 use pyo3::prelude::*;
 
 use crate::sql::types::{
@@ -47,7 +49,7 @@ impl TableSource for DaskTableSource {
     fn supports_filter_pushdown(
         &self,
         filter: &Expr,
-    ) -> datafusion_common::Result<TableProviderFilterPushDown> {
+    ) -> datafusion_python::datafusion_common::Result<TableProviderFilterPushDown> {
         let filters = split_conjunction(filter);
         if filters.iter().all(|f| is_supported_push_down_expr(f)) {
             // Push down filters to the tablescan operation if all are supported

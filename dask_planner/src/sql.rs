@@ -1,4 +1,3 @@
-pub mod column;
 pub mod exceptions;
 pub mod function;
 pub mod logical;
@@ -11,29 +10,31 @@ pub mod types;
 
 use std::{collections::HashMap, sync::Arc};
 
-use datafusion::arrow::datatypes::{DataType, Field, Schema, TimeUnit};
-use datafusion_common::{config::ConfigOptions, DFSchema, DataFusionError};
-use datafusion_expr::{
-    logical_plan::Extension,
-    AccumulatorFunctionImplementation,
-    AggregateUDF,
-    LogicalPlan,
-    PlanVisitor,
-    ReturnTypeFunction,
-    ScalarFunctionImplementation,
-    ScalarUDF,
-    Signature,
-    StateTypeFunction,
-    TableSource,
-    TypeSignature,
-    Volatility,
-};
-use datafusion_python::sql::logical::PyLogicalPlan;
-use datafusion_sql::{
-    parser::Statement as DFStatement,
-    planner::{ContextProvider, SqlToRel},
-    ResolvedTableReference,
-    TableReference,
+use datafusion_python::{
+    datafusion::arrow::datatypes::{DataType, Field, Schema, TimeUnit},
+    datafusion_common::{config::ConfigOptions, DFSchema, DataFusionError},
+    datafusion_expr::{
+        logical_plan::Extension,
+        AccumulatorFunctionImplementation,
+        AggregateUDF,
+        LogicalPlan,
+        PlanVisitor,
+        ReturnTypeFunction,
+        ScalarFunctionImplementation,
+        ScalarUDF,
+        Signature,
+        StateTypeFunction,
+        TableSource,
+        TypeSignature,
+        Volatility,
+    },
+    datafusion_sql::{
+        parser::Statement as DFStatement,
+        planner::{ContextProvider, SqlToRel},
+        ResolvedTableReference,
+        TableReference,
+    },
+    sql::logical::PyLogicalPlan,
 };
 use pyo3::prelude::*;
 
@@ -73,9 +74,9 @@ use crate::{
 /// from SQL using DaskSQLContext.
 ///
 /// ```
-/// use datafusion::prelude::*;
+/// use datafusion_python::datafusion::prelude::*;
 ///
-/// # use datafusion_common::Result;
+/// # use datafusion_python::datafusion_common::Result;
 /// # #[tokio::main]
 /// # async fn main() -> Result<()> {
 /// let mut ctx = DaskSQLContext::new();
@@ -493,7 +494,7 @@ impl DaskSQLContext {
         statement: statement::PyStatement,
     ) -> PyResult<PyLogicalPlan> {
         self._logical_relational_algebra(statement.statement)
-            .map(|e| PyLogicalPlan::from(e))
+            .map(PyLogicalPlan::from)
             .map_err(py_parsing_exp)
     }
 
@@ -512,7 +513,7 @@ impl DaskSQLContext {
                 if valid {
                     optimizer::DaskSqlOptimizer::new()
                         .optimize((*existing_plan.plan()).clone())
-                        .map(|k| PyLogicalPlan::from(k))
+                        .map(PyLogicalPlan::from)
                         .map_err(py_optimization_exp)
                 } else {
                     // This LogicalPlan does not support Optimization. Return original
@@ -726,8 +727,10 @@ fn generate_signatures(cartesian_setup: Vec<Vec<DataType>>) -> Signature {
 
 #[cfg(test)]
 mod test {
-    use datafusion::arrow::datatypes::DataType;
-    use datafusion_expr::{Signature, TypeSignature, Volatility};
+    use datafusion_python::{
+        datafusion::arrow::datatypes::DataType,
+        datafusion_expr::{Signature, TypeSignature, Volatility},
+    };
 
     use crate::sql::generate_signatures;
 

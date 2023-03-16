@@ -1,21 +1,23 @@
 use std::{convert::From, sync::Arc};
 
-use datafusion::arrow::datatypes::DataType;
-use datafusion_common::{Column, DFField, DFSchema, ScalarValue};
-use datafusion_expr::{
-    expr::{AggregateFunction, BinaryExpr, Cast, Sort, TryCast, WindowFunction},
-    lit,
-    utils::exprlist_to_fields,
-    Between,
-    BuiltinScalarFunction,
-    Case,
-    Expr,
-    GetIndexedField,
-    Like,
-    LogicalPlan,
-    Operator,
+use datafusion_python::{
+    datafusion::arrow::datatypes::DataType,
+    datafusion_common::{Column, DFField, DFSchema, ScalarValue},
+    datafusion_expr::{
+        expr::{AggregateFunction, BinaryExpr, Cast, Sort, TryCast, WindowFunction},
+        lit,
+        utils::exprlist_to_fields,
+        Between,
+        BuiltinScalarFunction,
+        Case,
+        Expr,
+        GetIndexedField,
+        Like,
+        LogicalPlan,
+        Operator,
+    },
+    sql::logical::PyLogicalPlan,
 };
-use datafusion_python::sql::logical::PyLogicalPlan;
 use pyo3::prelude::*;
 
 use crate::{
@@ -805,8 +807,10 @@ pub fn expr_to_field(expr: &Expr, input_plan: &LogicalPlan) -> Result<DFField> {
 
 #[cfg(test)]
 mod test {
-    use datafusion_common::{Column, ScalarValue};
-    use datafusion_expr::Expr;
+    use datafusion_python::{
+        datafusion_common::{Column, ScalarValue},
+        datafusion_expr::Expr,
+    };
 
     use crate::{error::Result, expression::PyExpr};
 

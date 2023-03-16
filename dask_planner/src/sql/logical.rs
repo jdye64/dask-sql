@@ -22,7 +22,7 @@ pub mod sort;
 pub mod use_schema;
 pub mod window;
 
-use datafusion_expr::LogicalPlan;
+use datafusion_python::datafusion_expr::LogicalPlan;
 
 // use self::{
 //     alter_schema::AlterSchemaPlanNode,
