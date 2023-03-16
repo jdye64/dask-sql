@@ -130,7 +130,7 @@ impl PyCreateTable {
 
     #[staticmethod]
     fn from_plan(plan: PyLogicalPlan) -> PyResult<PyCreateTable> {
-        let tmp = &*(plan.plan()).clone();
+        let tmp = &*(plan.plan());
         PyCreateTable::try_from(tmp.clone())
     }
 }

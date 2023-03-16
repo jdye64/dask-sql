@@ -1,4 +1,9 @@
-use std::{any::Any, fmt, sync::Arc};
+use std::{
+    any::Any,
+    fmt,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 use datafusion_python::{
     datafusion_common::{DFSchema, DFSchemaRef},
@@ -9,7 +14,7 @@ use pyo3::prelude::*;
 
 use crate::sql::{exceptions::py_type_err, logical};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct UseSchemaPlanNode {
     pub schema: DFSchemaRef,
     pub schema_name: String,
@@ -18,6 +23,12 @@ pub struct UseSchemaPlanNode {
 impl Debug for UseSchemaPlanNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.fmt_for_explain(f)
+    }
+}
+
+impl Hash for UseSchemaPlanNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dyn_hash(state);
     }
 }
 
@@ -57,15 +68,19 @@ impl UserDefinedLogicalNode for UseSchemaPlanNode {
     }
 
     fn name(&self) -> &str {
-        "UseSchemaPlanNode"
+        "UseSchema"
     }
 
-    fn dyn_hash(&self, state: &mut dyn std::hash::Hasher) {
-        todo!()
+    fn dyn_hash(&self, state: &mut dyn Hasher) {
+        let mut s = state;
+        self.hash(&mut s);
     }
 
     fn dyn_eq(&self, other: &dyn UserDefinedLogicalNode) -> bool {
-        todo!()
+        match other.as_any().downcast_ref::<Self>() {
+            Some(o) => self == o,
+            None => false,
+        }
     }
 }
 

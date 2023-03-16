@@ -294,3 +294,162 @@ use crate::sql::exceptions::py_type_err;
 //         }
 //     }
 // }
+//     #[pyo3(name = "getCurrentNodeTableName")]
+//     pub fn get_current_node_table_name(&mut self) -> PyResult<String> {
+//         match self.table() {
+//             Ok(dask_table) => Ok(dask_table.table_name),
+//             Err(_e) => Err(py_type_err("Unable to determine current node table name")),
+//         }
+//     }
+
+//     /// Gets the Relation "type" of the current node. Ex: Projection, TableScan, etc
+//     pub fn get_current_node_type(&mut self) -> PyResult<&str> {
+//         Ok(match self.current_node() {
+//             LogicalPlan::Dml(_) => "DataManipulationLanguage",
+//             LogicalPlan::DescribeTable(_) => "DescribeTable",
+//             LogicalPlan::Prepare(_) => "Prepare",
+//             LogicalPlan::Distinct(_) => "Distinct",
+//             LogicalPlan::Projection(_projection) => "Projection",
+//             LogicalPlan::Filter(_filter) => "Filter",
+//             LogicalPlan::Window(_window) => "Window",
+//             LogicalPlan::Aggregate(_aggregate) => "Aggregate",
+//             LogicalPlan::Sort(_sort) => "Sort",
+//             LogicalPlan::Join(_join) => "Join",
+//             LogicalPlan::CrossJoin(_cross_join) => "CrossJoin",
+//             LogicalPlan::Repartition(_repartition) => "Repartition",
+//             LogicalPlan::Union(_union) => "Union",
+//             LogicalPlan::TableScan(_table_scan) => "TableScan",
+//             LogicalPlan::EmptyRelation(_empty_relation) => "EmptyRelation",
+//             LogicalPlan::Limit(_limit) => "Limit",
+//             LogicalPlan::CreateExternalTable(_create_external_table) => "CreateExternalTable",
+//             LogicalPlan::CreateMemoryTable(_create_memory_table) => "CreateMemoryTable",
+//             LogicalPlan::DropTable(_drop_table) => "DropTable",
+//             LogicalPlan::DropView(_drop_view) => "DropView",
+//             LogicalPlan::Values(_values) => "Values",
+//             LogicalPlan::Explain(_explain) => "Explain",
+//             LogicalPlan::Analyze(_analyze) => "Analyze",
+//             LogicalPlan::Subquery(_sub_query) => "Subquery",
+//             LogicalPlan::SubqueryAlias(_sqalias) => "SubqueryAlias",
+//             LogicalPlan::CreateCatalogSchema(_create) => "CreateCatalogSchema",
+//             LogicalPlan::CreateCatalog(_create_catalog) => "CreateCatalog",
+//             LogicalPlan::CreateView(_create_view) => "CreateView",
+//             LogicalPlan::SetVariable(_) => "SetVariable",
+//             // Further examine and return the name that is a possible Dask-SQL Extension type
+//             LogicalPlan::Extension(extension) => {
+//                 let node = extension.node.as_any();
+//                 if node.downcast_ref::<CreateModelPlanNode>().is_some() {
+//                     "CreateModel"
+//                 } else if node.downcast_ref::<CreateExperimentPlanNode>().is_some() {
+//                     "CreateExperiment"
+//                 } else if node.downcast_ref::<CreateCatalogSchemaPlanNode>().is_some() {
+//                     "CreateCatalogSchema"
+//                 } else if node.downcast_ref::<CreateTablePlanNode>().is_some() {
+//                     "CreateTable"
+//                 } else if node.downcast_ref::<DropModelPlanNode>().is_some() {
+//                     "DropModel"
+//                 } else if node.downcast_ref::<PredictModelPlanNode>().is_some() {
+//                     "PredictModel"
+//                 } else if node.downcast_ref::<ExportModelPlanNode>().is_some() {
+//                     "ExportModel"
+//                 } else if node.downcast_ref::<DescribeModelPlanNode>().is_some() {
+//                     "DescribeModel"
+//                 } else if node.downcast_ref::<ShowSchemasPlanNode>().is_some() {
+//                     "ShowSchemas"
+//                 } else if node.downcast_ref::<ShowTablesPlanNode>().is_some() {
+//                     "ShowTables"
+//                 } else if node.downcast_ref::<ShowColumnsPlanNode>().is_some() {
+//                     "ShowColumns"
+//                 } else if node.downcast_ref::<ShowModelsPlanNode>().is_some() {
+//                     "ShowModels"
+//                 } else if node.downcast_ref::<DropSchemaPlanNode>().is_some() {
+//                     "DropSchema"
+//                 } else if node.downcast_ref::<UseSchemaPlanNode>().is_some() {
+//                     "UseSchema"
+//                 } else if node.downcast_ref::<AnalyzeTablePlanNode>().is_some() {
+//                     "AnalyzeTable"
+//                 } else if node.downcast_ref::<AlterTablePlanNode>().is_some() {
+//                     "AlterTable"
+//                 } else if node.downcast_ref::<AlterSchemaPlanNode>().is_some() {
+//                     "AlterSchema"
+//                 } else {
+//                     // Default to generic `Extension`
+//                     "Extension"
+//                 }
+//             }
+//             LogicalPlan::Unnest(_unnest) => "Unnest",
+//         })
+//     }
+
+//     /// Explain plan for the full and original LogicalPlan
+//     pub fn explain_original(&self) -> PyResult<String> {
+//         Ok(format!("{}", self.original_plan.display_indent()))
+//     }
+
+//     /// Explain plan from the current node onward
+//     pub fn explain_current(&mut self) -> PyResult<String> {
+//         Ok(format!("{}", self.current_node().display_indent()))
+//     }
+
+//     #[pyo3(name = "getRowType")]
+//     pub fn row_type(&self) -> PyResult<RelDataType> {
+//         match &self.original_plan {
+//             LogicalPlan::Join(join) => {
+//                 let mut lhs_fields: Vec<RelDataTypeField> = join
+//                     .left
+//                     .schema()
+//                     .fields()
+//                     .iter()
+//                     .map(|f| RelDataTypeField::from(f, join.left.schema().as_ref()))
+//                     .collect::<Result<Vec<_>>>()
+//                     .map_err(py_type_err)?;
+
+//                 let mut rhs_fields: Vec<RelDataTypeField> = join
+//                     .right
+//                     .schema()
+//                     .fields()
+//                     .iter()
+//                     .map(|f| RelDataTypeField::from(f, join.right.schema().as_ref()))
+//                     .collect::<Result<Vec<_>>>()
+//                     .map_err(py_type_err)?;
+
+//                 lhs_fields.append(&mut rhs_fields);
+//                 Ok(RelDataType::new(false, lhs_fields))
+//             }
+//             LogicalPlan::Distinct(distinct) => {
+//                 let schema = distinct.input.schema();
+//                 let rel_fields: Vec<RelDataTypeField> = schema
+//                     .fields()
+//                     .iter()
+//                     .map(|f| RelDataTypeField::from(f, schema.as_ref()))
+//                     .collect::<Result<Vec<_>>>()
+//                     .map_err(py_type_err)?;
+//                 Ok(RelDataType::new(false, rel_fields))
+//             }
+//             _ => {
+//                 let schema = self.original_plan.schema();
+//                 let rel_fields: Vec<RelDataTypeField> = schema
+//                     .fields()
+//                     .iter()
+//                     .map(|f| RelDataTypeField::from(f, schema.as_ref()))
+//                     .collect::<Result<Vec<_>>>()
+//                     .map_err(py_type_err)?;
+//                 Ok(RelDataType::new(false, rel_fields))
+//             }
+//         }
+//     }
+// }
+
+// impl From<PyLogicalPlan> for LogicalPlan {
+//     fn from(logical_plan: PyLogicalPlan) -> LogicalPlan {
+//         logical_plan.original_plan
+//     }
+// }
+
+// impl From<LogicalPlan> for PyLogicalPlan {
+//     fn from(logical_plan: LogicalPlan) -> PyLogicalPlan {
+//         PyLogicalPlan {
+//             original_plan: logical_plan,
+//             current_node: None,
+//         }
+//     }
+// }

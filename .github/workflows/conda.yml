@@ -31,6 +31,8 @@ jobs:
   conda:
     name: Build (and optionally upload) the conda nightly
     runs-on: ubuntu-latest
+    container:
+      image: amd64/rust
     steps:
       - uses: actions/checkout@v3
         with:
@@ -49,10 +51,29 @@ jobs:
           which python
           pip list
           mamba list
+      - name: Cache Cargo
+        uses: actions/cache@v3
+        with:
+          # these represent dependencies downloaded by cargo
+          # and thus do not depend on the OS, arch nor rust version.
+          path: /github/home/.cargo
+          key: cargo-cache-
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-builder
+        with:
+          rust-version: stable
       - name: Build conda package
+        env:
+          RUSTFMT: /usr/local/cargo/bin/rustfmt
         run: |
           # suffix for nightly package versions
           export VERSION_SUFFIX=a`date +%y%m%d`
+
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          echo $RUSTFMT
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+          rustup default stable
 
           conda mambabuild continuous_integration/recipe \
                            --no-anaconda-upload \
