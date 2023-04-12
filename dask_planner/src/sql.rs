@@ -37,10 +37,13 @@ use datafusion_sql::{
 use log::{debug, warn};
 use pyo3::prelude::*;
 
-use self::logical::{
-    create_catalog_schema::CreateCatalogSchemaPlanNode,
-    drop_schema::DropSchemaPlanNode,
-    use_schema::UseSchemaPlanNode,
+use self::{
+    logical::{
+        create_catalog_schema::CreateCatalogSchemaPlanNode,
+        drop_schema::DropSchemaPlanNode,
+        use_schema::UseSchemaPlanNode,
+    },
+    optimizer::OptimizerOutput,
 };
 use crate::{
     dialect::DaskDialect,
@@ -93,6 +96,7 @@ pub struct DaskSQLContext {
     current_schema: String,
     schemas: HashMap<String, schema::DaskSchema>,
     options: ConfigOptions,
+    outputs: Vec<OptimizerOutput>,
 }
 
 impl ContextProvider for DaskSQLContext {
@@ -428,6 +432,42 @@ impl ContextProvider for DaskSQLContext {
     }
 }
 
+#[pyclass(name = "OptimizerOutput", module = "dask_planner", subclass)]
+#[derive(Clone, Debug)]
+pub struct PyOptimizerOutput {
+    pub output: OptimizerOutput,
+}
+
+#[pymethods]
+impl PyOptimizerOutput {
+    #[getter]
+    fn get_optimizer_name(&self) -> PyResult<String> {
+        Ok(self.output.optimizer_name.clone())
+    }
+
+    #[getter]
+    fn get_input_plan(&self) -> PyResult<String> {
+        Ok(self.output.input_plan.clone())
+    }
+
+    #[getter]
+    fn get_output_plan(&self) -> PyResult<String> {
+        Ok(self.output.output_plan.clone())
+    }
+}
+
+impl From<PyOptimizerOutput> for OptimizerOutput {
+    fn from(output: PyOptimizerOutput) -> OptimizerOutput {
+        output.output
+    }
+}
+
+impl From<OptimizerOutput> for PyOptimizerOutput {
+    fn from(output: OptimizerOutput) -> PyOptimizerOutput {
+        PyOptimizerOutput { output }
+    }
+}
+
 #[pymethods]
 impl DaskSQLContext {
     #[new]
@@ -437,6 +477,7 @@ impl DaskSQLContext {
             current_schema: default_schema_name.to_owned(),
             schemas: HashMap::new(),
             options: ConfigOptions::new(),
+            outputs: vec![],
         }
     }
 
@@ -508,11 +549,18 @@ impl DaskSQLContext {
             .map_err(py_parsing_exp)
     }
 
+    pub fn last_outputs(&self) -> Vec<PyOptimizerOutput> {
+        self.outputs
+            .iter()
+            .map(|k| PyOptimizerOutput { output: k.clone() })
+            .collect()
+    }
+
     /// Accepts an existing relational plan, `LogicalPlan`, and optimizes it
     /// by applying a set of `optimizer` trait implementations against the
     /// `LogicalPlan`
     pub fn optimize_relational_algebra(
-        &self,
+        &mut self,
         existing_plan: logical::PyLogicalPlan,
     ) -> PyResult<logical::PyLogicalPlan> {
         // Certain queries cannot be optimized. Ex: `EXPLAIN SELECT * FROM test` simply return those plans as is
@@ -521,13 +569,31 @@ impl DaskSQLContext {
         match existing_plan.original_plan.accept(&mut visitor) {
             Ok(valid) => {
                 if valid {
-                    optimizer::DaskSqlOptimizer::new()
+                    let optimization_result = optimizer::DaskSqlOptimizer::new()
                         .optimize(existing_plan.original_plan)
+                        .unwrap();
+
+                    let py_logical_plan = optimization_result
+                        .1
                         .map(|k| PyLogicalPlan {
                             original_plan: k,
                             current_node: None,
                         })
-                        .map_err(py_optimization_exp)
+                        .map_err(py_optimization_exp);
+
+                    let outputs = optimization_result.0.unwrap();
+                    self.outputs = outputs;
+
+                    // let outputs: Vec<OptimizerOutput> = optimization_result.0.unwrap()
+                    //     .map(|k: Vec<OptimizerOutput>| {
+                    //         k.iter()
+                    //             .map(|p| {
+                    //                 p.clone().into()
+                    //             })
+                    //             .collect()
+                    //     });
+
+                    Ok(py_logical_plan.unwrap())
                 } else {
                     // This LogicalPlan does not support Optimization. Return original
                     warn!("This LogicalPlan does not support Optimization. Returning original");

@@ -492,7 +492,7 @@ class Context:
                     self.create_table(df_name, df, gpu=gpu)
 
             if isinstance(sql, str):
-                rel, _ = self._get_ral(sql)
+                _, rel, _ = self._get_ral(sql)
             elif isinstance(sql, LogicalPlan):
                 rel = sql
             else:
@@ -501,6 +501,39 @@ class Context:
                 )
 
             return self._compute_table_from_rel(rel, return_futures)
+
+    def explain_optimizations(
+        self,
+        sql: str,
+        dataframes: Dict[str, Union[dd.DataFrame, pd.DataFrame]] = None,
+        gpu: bool = False,
+    ):
+        """
+        Return the stringified relational algebra that this query will produce
+        once triggered (with ``sql()``).
+        Helpful to understand the inner workings of dask-sql, but typically not
+        needed to query your data.
+
+        If the query is of DDL type (e.g. CREATE TABLE or DESCRIBE SCHEMA),
+        no relational algebra plan is created and therefore nothing returned.
+
+        Args:
+            sql (:obj:`str`): The query string to use
+            dataframes (:obj:`Dict[str, dask.dataframe.DataFrame]`): additional Dask or pandas dataframes
+                to register before executing this query
+            gpu (:obj:`bool`): Whether or not to load the additional Dask or pandas dataframes (if any) on GPU;
+                requires cuDF / dask-cuDF if enabled. Defaults to False.
+
+        Returns:
+            :obj:`str`: a description of the created relational algebra.
+
+        """
+        if dataframes is not None:
+            for df_name, df in dataframes.items():
+                self.create_table(df_name, df, gpu=gpu)
+
+        intermediate_diffs, _, rel_string = self._get_ral(sql)
+        return intermediate_diffs, rel_string
 
     def explain(
         self,
@@ -532,7 +565,7 @@ class Context:
             for df_name, df in dataframes.items():
                 self.create_table(df_name, df, gpu=gpu)
 
-        _, rel_string = self._get_ral(sql)
+        _, _, rel_string = self._get_ral(sql)
         return rel_string
 
     def visualize(self, sql: str, filename="mydask.png") -> None:  # pragma: no cover
@@ -813,6 +846,7 @@ class Context:
         if dask_config.get("sql.optimize"):
             try:
                 rel = self.context.optimize_relational_algebra(nonOptimizedRel)
+                intermediate_plan_diffs = self.context.last_outputs()
             except DFOptimizationException as oe:
                 rel = nonOptimizedRel
                 raise OptimizationException(str(oe)) from None
@@ -823,7 +857,7 @@ class Context:
         logger.debug(f"_get_ral -> LogicalPlan: {rel}")
         logger.debug(f"Extracted relational algebra:\n {rel_string}")
 
-        return rel, rel_string
+        return intermediate_plan_diffs, rel, rel_string
 
     def _compute_table_from_rel(self, rel: "LogicalPlan", return_futures: bool = True):
         dc = RelConverter.convert(rel, context=self)

@@ -1,11 +1,15 @@
 import asyncio
+import difflib
 import logging
 from argparse import ArgumentParser
 from uuid import uuid4
 
 import dask.distributed
+import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from uvicorn import Config, Server
 
 from dask_sql.context import Context
@@ -14,6 +18,62 @@ from dask_sql.server.responses import DataResults, ErrorResults, QueryResults
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
+
+app.mount(
+    "/static",
+    StaticFiles(directory="/home/jeremy/Development/dask-sql/dask_sql/server/static"),
+    name="static",
+)
+BASE_PATH = "/home/jeremy/Development/dask-sql/dask_sql/server/static/templates"
+print(f"BASE_PATH: {BASE_PATH}")
+TEMPLATES = Jinja2Templates(directory=str(BASE_PATH))
+
+
+@app.get("/v1/dry_run")
+async def dry_run(request: Request):
+    """
+    Endpoint for simulating a dry run and returning the expected runtime configurations
+    to the caller as a result
+    """
+    try:
+        # sql = (await request.body()).decode().strip()
+
+        # initialize list elements
+        data = [10, 20, 30, 40, 50, 60]
+
+        # Create the pandas DataFrame with column name is provided explicitly
+        df = pd.DataFrame(data, columns=["number"])
+
+        request.app.c.create_table("numbers", df)
+        sql = "SELECT * FROM numbers WHERE number >= 20"
+
+        def get_diffs(old, new):
+            result = ""
+            codes = difflib.SequenceMatcher(a=old, b=new).get_opcodes()
+            for code in codes:
+                if code[0] == "equal":
+                    result += old[code[1] : code[2]]
+                elif code[0] == "delete":
+                    result += f"<font color='red'>{old[code[1]:code[2]]}</font>"
+                elif code[0] == "insert":
+                    result += f"<font color='green'>{old[code[1]:code[2]]}</font>"
+                elif code[0] == "replace":
+                    result += f"<font color='red'>{old[code[1]:code[2]]}</font><font color='green'>{new[code[3]:code[4]]}</font>"
+            return result
+
+        intermediate_diffs, rel_string = request.app.c.explain_optimizations(sql)
+        return TEMPLATES.TemplateResponse(
+            "diff.html",
+            {
+                "request": request,
+                "sql": sql,
+                "intermediate_diffs": intermediate_diffs,
+                "rel_string": rel_string,
+                "diff": get_diffs,
+            },
+        )
+    except Exception as e:
+        return ErrorResults(e, request=request)
 
 
 @app.get("/v1/empty")

@@ -1,0 +1,42 @@
+<html>
+<head>
+    <title>Query Dry Run Results</title>
+    <!-- <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"> -->
+</head>
+<body>
+    <p>
+        <b>SQL:</b>
+        {{ sql }}
+    </p>
+    <table>
+        <th style="border: 1px solid black">Iteration</th>
+        <th style="border: 1px solid black">Optimization Rule</th>
+        <th style="border: 1px solid black">Input Plan</th>
+        <th style="border: 1px solid black">Output Plan</th>
+        {%- for intermediate_diff in intermediate_diffs -%}
+            <tr>
+                <td style="border: 1px solid black">
+                    <div style="white-space: pre-wrap;">
+                        {{loop.index}}
+                    </div>
+                </td>
+                <td style="border: 1px solid black">
+                    <div style="white-space: pre-wrap;">
+                        {{- intermediate_diff.optimizer_name|safe -}}
+                    </div>
+                </td>
+                <td style="border: 1px solid black">
+                    <div style="white-space: pre-wrap;">
+                        {{- intermediate_diff.input_plan|safe -}}
+                    </div>
+                </td>
+                <td style="border: 1px solid black">
+                    <div style="white-space: pre-wrap;">
+                        {{- diff(intermediate_diff.input_plan, intermediate_diff.output_plan)|safe -}}
+                    </div>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

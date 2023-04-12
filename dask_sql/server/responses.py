@@ -48,6 +48,13 @@ class StatementStats:
         self.rootStage = StageStats()
 
 
+class DryRunResults:
+    def __init__(self, request: Request, intermediate_diffs=None, rel_string=None):
+        self.id = str(uuid.uuid4())
+        self.intermediate_optimization_diffs = intermediate_diffs
+        self.rel_string = rel_string
+
+
 class QueryResults:
     def __init__(self, request: Request, next_url: str = None, cancel_url: str = None):
         empty_url = str(request.url.replace(path=request.app.url_path_for("empty")))
