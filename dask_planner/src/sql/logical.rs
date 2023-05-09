@@ -31,7 +31,6 @@ pub mod show_schemas;
 pub mod show_tables;
 pub mod sort;
 pub mod subquery_alias;
-pub mod table_scan;
 pub mod use_schema;
 pub mod utils;
 pub mod window;
@@ -146,11 +145,6 @@ impl PyLogicalPlan {
 
     /// LogicalPlan::Window as PyWindow
     pub fn window(&self) -> PyResult<window::PyWindow> {
-        to_py_plan(self.current_node.as_ref())
-    }
-
-    /// LogicalPlan::TableScan as PyTableScan
-    pub fn table_scan(&self) -> PyResult<table_scan::PyTableScan> {
         to_py_plan(self.current_node.as_ref())
     }
 
